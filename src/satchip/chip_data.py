@@ -1,21 +1,23 @@
 import argparse
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+import asf_search as asf
 import numpy as np
+import shapely
 import xarray as xr
 from tqdm import tqdm
 
 import satchip
 from satchip import utils
 from satchip.chip_hls import get_hls_data
-from satchip.chip_sentinel1rtc import get_s1rtc_data
+from satchip.chip_sentinel1rtc import get_rtcs_for, get_s1rtc_chip_data
 from satchip.chip_sentinel2 import get_s2l2a_data
 from satchip.terra_mind_grid import TerraMindGrid
 
 
-GET_DATA_FNS = {'S2L2A': get_s2l2a_data, 'S1RTC': get_s1rtc_data, 'HLS': get_hls_data}
+GET_DATA_FNS = {'S2L2A': get_s2l2a_data, 'HLS': get_hls_data}
 
 
 def fill_missing_times(data_chip: xr.DataArray, times: np.ndarray) -> xr.DataArray:
@@ -43,6 +45,47 @@ def check_bounds_size(bounds: list[int]) -> None:
     assert bounds_area_degrees < MAX_BOUND_AREA_DEGREES, err_message
 
 
+def get_granules(bounds: list[int], date_start: datetime, date_end: datetime) -> list:
+    date_start = date_start
+    date_end = date_end + timedelta(days=1)  # inclusive end
+    roi = shapely.box(*bounds)
+    search_results = asf.geo_search(
+        intersectsWith=roi.wkt,
+        start=date_start,
+        end=date_end,
+        beamMode=asf.constants.BEAMMODE.IW,
+        polarization=asf.constants.POLARIZATION.VV_VH,
+        platform=asf.constants.PLATFORM.SENTINEL1,
+        processingLevel=asf.constants.PRODUCT_TYPE.SLC,
+    )
+
+    return search_results
+
+
+def pair_slcs_to_chips(chips: list, granules: list, strategy: str) -> list:
+    slcs_for_chips = []
+    for chip in chips:
+        chip_roi = shapely.box(*chip.bounds)
+        intersecting = [granule for granule in granules if get_pct_intersect(granule, chip_roi) > 95]
+        intersecting = sorted(intersecting, key=lambda g: (-get_pct_intersect(g, chip_roi), g.properties['startTime']))
+
+        if len(intersecting) < 1:
+            raise ValueError(f'No products found for chip {chip.name} in given date range')
+
+        if strategy == 'BEST':
+            intersecting = intersecting[:1]
+
+        slcs_for_chips.append(intersecting)
+
+    return slcs_for_chips
+
+
+def get_pct_intersect(product: asf.S1Product, roi: shapely.geometry.Polygon) -> int:
+    footprint = shapely.geometry.shape(product.geometry)
+    intersection = int(np.round(100 * roi.intersection(footprint).area / roi.area))
+    return intersection
+
+
 def chip_data(
     label_path: Path,
     platform: str,
@@ -53,7 +96,6 @@ def chip_data(
     output_dir: Path,
     scratch_dir: Path | None = None,
 ) -> xr.Dataset:
-    get_data_fn = GET_DATA_FNS[platform]
     labels = utils.load_chip(label_path)
     date = labels.time.data[0].astype('M8[ms]').astype(datetime)
     bounds = labels.attrs['bounds']
@@ -65,14 +107,21 @@ def chip_data(
         opts['max_cloud_pct'] = max_cloud_pct
 
     data_chips = []
-    if scratch_dir is not None:
+    if platform == 'S1RTC':
+        check_bounds_size(bounds)
+        granules = get_granules(bounds, date_start, date_end)
+        slcs_for_chips = pair_slcs_to_chips(terra_mind_chips, granules, strategy)
+        assert len(slcs_for_chips) == len(terra_mind_chips)
+
+        rtc_paths_for_chips = get_rtcs_for(slcs_for_chips, scratch_dir)
+
+        for chip, rtc_paths in tqdm(list(zip(terra_mind_chips, rtc_paths_for_chips))):
+            chip = get_s1rtc_chip_data(chip, rtc_paths, scratch_dir, opts)
+            data_chips.append(chip)
+    else:
+        get_data_fn = GET_DATA_FNS[platform]
         for chip in tqdm(terra_mind_chips):
             data_chips.append(get_data_fn(chip, scratch_dir, opts=opts))
-    else:
-        with TemporaryDirectory() as tmp_dir:
-            scratch_dir = Path(tmp_dir)
-            for chip in tqdm(terra_mind_chips):
-                data_chips.append(get_data_fn(chip, scratch_dir, opts=opts))
 
     times = np.unique(np.concatenate([dc.time.data for dc in data_chips]))
     for i, data_chip in enumerate(data_chips):
@@ -108,7 +157,8 @@ def main() -> None:
     assert 0 <= args.maxcloudpct <= 100, 'maxcloudpct must be between 0 and 100'
     date_start, date_end = [datetime.strptime(d, '%Y%m%d') for d in args.daterange.split('-')]
     assert date_start < date_end, 'start date must be before end date'
-    chip_data(
+
+    params = [
         args.labelpath,
         args.platform,
         date_start,
@@ -116,8 +166,14 @@ def main() -> None:
         args.strategy,
         args.maxcloudpct,
         args.outdir,
-        args.scratchdir,
-    )
+    ]
+
+    if args.scratchdir is not None:
+        chip_data(*params, args.scratchdir)
+    else:
+        with TemporaryDirectory() as tmp_dir:
+            scratch_dir = Path(tmp_dir)
+            chip_data(*params, scratch_dir)
 
 
 if __name__ == '__main__':
