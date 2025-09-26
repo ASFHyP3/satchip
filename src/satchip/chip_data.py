@@ -34,6 +34,15 @@ def fill_missing_times(data_chip: xr.DataArray, times: np.ndarray) -> xr.DataArr
     return xr.concat([data_chip, missing_data], dim='time').sortby('time')
 
 
+def check_bounds_size(bounds: list[int]) -> None:
+    min_lon, min_lat, max_lon, max_lat = bounds
+    MAX_BOUND_AREA_DEGREES = 3
+    bounds_area_degrees = (max_lon - min_lon) * (max_lat - min_lat)
+
+    err_message = f'Bounds area is to large ({bounds_area_degrees}). Must be less than {MAX_BOUND_AREA_DEGREES} degrees'
+    assert bounds_area_degrees < MAX_BOUND_AREA_DEGREES, err_message
+
+
 def chip_data(
     label_path: Path,
     platform: str,
