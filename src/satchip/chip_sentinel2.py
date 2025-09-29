@@ -11,6 +11,7 @@ import xarray as xr
 from pystac.item import Item
 from pystac_client import Client
 
+from satchip import utils
 from satchip.chip_xr_base import create_template_da
 from satchip.terra_mind_grid import TerraMindChip
 
@@ -127,7 +128,7 @@ def get_scenes(
     return valid_scenes
 
 
-def get_s2l2a_data(chip: TerraMindChip, scratch_dir: Path, opts: dict) -> xr.DataArray:
+def get_s2l2a_data(chip: TerraMindChip, scratch_dir: Path, opts: utils.ChipDataOpts) -> xr.DataArray:
     """Get XArray DataArray of Sentinel-2 L2A image for the given bounds and best collection parameters.
 
     Args:

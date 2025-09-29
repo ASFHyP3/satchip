@@ -7,15 +7,17 @@ import numpy as np
 import rioxarray
 import shapely
 import xarray as xr
-from asf_search import S1Product
 from hyp3_sdk import Job
 from hyp3_sdk.util import extract_zipped_product
 
+from satchip import utils
 from satchip.chip_xr_base import create_template_da
 from satchip.terra_mind_grid import TerraMindChip
 
 
-def get_rtc_paths_for_chips(terra_mind_chips: list, bounds: list, scratch_dir: Path, opts: dict) -> list:
+def get_rtc_paths_for_chips(
+    terra_mind_chips: list[TerraMindChip], bounds: list[float], scratch_dir: Path, opts: utils.ChipDataOpts
+) -> dict[str, list[Path]]:
     date_start, date_end = opts['date_start'], opts['date_end']
     check_bounds_size(bounds)
     granules = get_granules(bounds, date_start, date_end)
@@ -27,7 +29,7 @@ def get_rtc_paths_for_chips(terra_mind_chips: list, bounds: list, scratch_dir: P
     return rtc_paths_for_chips
 
 
-def check_bounds_size(bounds: list[int]) -> None:
+def check_bounds_size(bounds: list[float]) -> None:
     min_lon, min_lat, max_lon, max_lat = bounds
     MAX_BOUND_AREA_DEGREES = 3
     bounds_area_degrees = (max_lon - min_lon) * (max_lat - min_lat)
@@ -36,7 +38,7 @@ def check_bounds_size(bounds: list[int]) -> None:
     assert bounds_area_degrees < MAX_BOUND_AREA_DEGREES, err_message
 
 
-def get_granules(bounds: list[int], date_start: datetime, date_end: datetime) -> list:
+def get_granules(bounds: list[float], date_start: datetime, date_end: datetime) -> asf.AsfSearchResults:
     date_start = date_start
     date_end = date_end + timedelta(days=1)  # inclusive end
     roi = shapely.box(*bounds)
@@ -53,8 +55,11 @@ def get_granules(bounds: list[int], date_start: datetime, date_end: datetime) ->
     return search_results
 
 
-def pair_slcs_to_chips(chips: list, granules: list, strategy: str) -> dict:
-    slcs_for_chips = {}
+def pair_slcs_to_chips(
+    chips: list[TerraMindChip], granules: asf.AsfSearchResults, strategy: str
+) -> dict[str, list[asf.AsfProduct]]:
+    slcs_for_chips: dict[str, list[asf.AsfProduct]] = {}
+
     for chip in chips:
         chip_roi = shapely.box(*chip.bounds)
         intersecting = [granule for granule in granules if get_pct_intersect(granule, chip_roi) > 95]
@@ -71,7 +76,7 @@ def pair_slcs_to_chips(chips: list, granules: list, strategy: str) -> dict:
     return slcs_for_chips
 
 
-def get_rtcs_for(slcs_for_chips: dict, scratch_dir: Path) -> list:
+def get_rtcs_for(slcs_for_chips: dict[str, list[asf.AsfProduct]], scratch_dir: Path) -> dict[str, list[Path]]:
     flat_slcs = sum(slcs_for_chips.values(), [])
     slc_names = set(granule.properties['sceneName'] for granule in flat_slcs)
 
@@ -97,21 +102,19 @@ def get_rtcs_for(slcs_for_chips: dict, scratch_dir: Path) -> list:
     batch = hyp3_sdk.Batch(hyp3_jobs)
     batch = hyp3.watch(batch)
 
-    succeeded_jobs = [j.succeeded() for j in batch]
+    assert all([j.succeeded() for j in batch]), 'One or more HyP3 jobs failed'
 
-    assert all(succeeded_jobs), 'One or more HyP3 jobs failed'
-
-    paths_by_slc_name = {}
+    paths_by_slc_name: dict[str, Path] = {}
     for job in batch:
         rtc_path = download_hyp3_rtc(job, scratch_dir)
         slc_name = job.job_parameters['granules'][0]
 
         paths_by_slc_name[slc_name] = rtc_path
 
-    rtc_paths_for_chips = {}
+    rtc_paths_for_chips: dict[str, list[Path]] = {}
     for chip_name, chip_slcs in slcs_for_chips.items():
-        chip_paths = [paths_by_slc_name[name.properties['sceneName']] for name in chip_slcs]
-        rtc_paths_for_chips[chip_name] = chip_paths
+        rtc_paths = [paths_by_slc_name[name.properties['sceneName']] for name in chip_slcs]
+        rtc_paths_for_chips[chip_name] = rtc_paths
 
     return rtc_paths_for_chips
 
@@ -125,7 +128,7 @@ def is_valid_rtc_job(job: hyp3_sdk.Job) -> bool:
     )
 
 
-def get_pct_intersect(product: S1Product, roi: shapely.geometry.Polygon) -> int:
+def get_pct_intersect(product: asf.S1Product, roi: shapely.geometry.Polygon) -> int:
     footprint = shapely.geometry.shape(product.geometry)
     intersection = int(np.round(100 * roi.intersection(footprint).area / roi.area))
     return intersection
@@ -143,7 +146,9 @@ def download_hyp3_rtc(job: Job, scratch_dir: Path) -> tuple[Path, Path]:
     return vv_path, vh_path
 
 
-def get_s1rtc_chip_data(chip: TerraMindChip, image_sets: list[Path], scratch_dir: Path, opts: dict) -> xr.DataArray:
+def get_s1rtc_chip_data(
+    chip: TerraMindChip, image_sets: list[Path], scratch_dir: Path, opts: utils.ChipDataOpts
+) -> xr.DataArray:
     roi = shapely.box(*chip.bounds)
     das = []
     template = create_template_da(chip)

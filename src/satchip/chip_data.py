@@ -48,7 +48,7 @@ def chip_data(
     grid = TerraMindGrid([bounds[1] - 1, bounds[3] + 1], [bounds[0] - 1, bounds[2] + 1])  # type: ignore
     terra_mind_chips = [c for c in grid.terra_mind_chips if c.name in list(labels.sample.data)]
 
-    opts = {'strategy': strategy, 'date_start': date_start, 'date_end': date_end}
+    opts: utils.ChipDataOpts = {'strategy': strategy, 'date_start': date_start, 'date_end': date_end}
     if platform in ['S2L2A', 'HLS']:
         opts['max_cloud_pct'] = max_cloud_pct
 
@@ -104,7 +104,7 @@ def main() -> None:
     date_start, date_end = [datetime.strptime(d, '%Y%m%d') for d in args.daterange.split('-')]
     assert date_start < date_end, 'start date must be before end date'
 
-    params = [
+    params = (
         args.labelpath,
         args.platform,
         date_start,
@@ -112,7 +112,7 @@ def main() -> None:
         args.strategy,
         args.maxcloudpct,
         args.outdir,
-    ]
+    )
 
     if args.scratchdir is not None:
         chip_data(*params, args.scratchdir)
