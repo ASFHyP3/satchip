@@ -119,32 +119,34 @@ class MockS1Product:
 
 def test_get_rtcs_for():
     slcs_for_chips = {
-        "chip_001": [MockS1Product("SLC_1"), MockS1Product("SLC_2")],
-        "chip_002": [MockS1Product("SLC_3"), MockS1Product("SLC_4")],
+        'chip_001': [MockS1Product('SLC_1'), MockS1Product('SLC_2')],
+        'chip_002': [MockS1Product('SLC_3'), MockS1Product('SLC_4')],
     }
-    scratch_dir = Path("/tmp")
+    scratch_dir = Path('/tmp')
 
     mock_jobs = []
-    for slc_name in ["SLC_1", "SLC_2", "SLC_3", "SLC_4"]:
+    for slc_name in ['SLC_1', 'SLC_2', 'SLC_3', 'SLC_4']:
         job = MagicMock()
         job.job_parameters = {'granules': [slc_name]}
         mock_jobs.append(job)
 
-    with patch("satchip.chip_sentinel1rtc._process_rtcs", return_value=mock_jobs) as mock_process_rtcs, \
-         patch("satchip.chip_sentinel1rtc._download_hyp3_rtc") as mock_download:
+    with (
+        patch('satchip.chip_sentinel1rtc._process_rtcs', return_value=mock_jobs) as mock_process_rtcs,
+        patch('satchip.chip_sentinel1rtc._download_hyp3_rtc') as mock_download,
+    ):
 
         def mock_download_fn(job, scratch):
-            return Path(f"/tmp/{job.job_parameters['granules'][0]}_rtc.tif")
+            return Path(f'/tmp/{job.job_parameters["granules"][0]}_rtc.tif')
 
         mock_download.side_effect = mock_download_fn
 
         result = chip_sentinel1rtc.get_rtcs_for(slcs_for_chips, scratch_dir)
 
         expected = {
-            "chip_001": [Path("/tmp/SLC_1_rtc.tif"), Path("/tmp/SLC_2_rtc.tif")],
-            "chip_002": [Path("/tmp/SLC_3_rtc.tif"), Path("/tmp/SLC_4_rtc.tif")],
+            'chip_001': [Path('/tmp/SLC_1_rtc.tif'), Path('/tmp/SLC_2_rtc.tif')],
+            'chip_002': [Path('/tmp/SLC_3_rtc.tif'), Path('/tmp/SLC_4_rtc.tif')],
         }
 
         assert result == expected
-        mock_process_rtcs.assert_called_once_with({"SLC_1", "SLC_2", "SLC_3", "SLC_4"})
+        mock_process_rtcs.assert_called_once_with({'SLC_1', 'SLC_2', 'SLC_3', 'SLC_4'})
         assert mock_download.call_count == 4
