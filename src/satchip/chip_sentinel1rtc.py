@@ -38,7 +38,7 @@ def check_bounds_size(bounds: list[float]) -> None:
     assert bounds_area_degrees < MAX_BOUND_AREA_DEGREES, err_message
 
 
-def get_granules(bounds: list[float], date_start: datetime, date_end: datetime) -> asf.ASFSearchResults:
+def get_granules(bounds: list[float], date_start: datetime, date_end: datetime) -> list[asf.S1Product]:
     date_start = date_start
     date_end = date_end + timedelta(days=1)  # inclusive end
     roi = shapely.box(*bounds)
@@ -52,11 +52,11 @@ def get_granules(bounds: list[float], date_start: datetime, date_end: datetime) 
         processingLevel=asf.constants.PRODUCT_TYPE.SLC,
     )
 
-    return search_results
+    return list(search_results)
 
 
 def pair_slcs_to_chips(
-    chips: list[TerraMindChip], granules: asf.ASFSearchResults, strategy: str
+    chips: list[TerraMindChip], granules: list[asf.S1Product], strategy: str
 ) -> dict[str, list[asf.S1Product]]:
     slcs_for_chips: dict[str, list[asf.S1Product]] = {}
 
