@@ -1,6 +1,7 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
+import asf_search as asf
 import hyp3_sdk
 import numpy as np
 import rioxarray
@@ -14,8 +15,64 @@ from satchip.chip_xr_base import create_template_da
 from satchip.terra_mind_grid import TerraMindChip
 
 
-def get_rtcs_for(slcs_for_chips: list, scratch_dir: Path) -> list:
-    flat_slcs = sum(slcs_for_chips, [])
+def get_rtc_paths_for_chips(terra_mind_chips: list, bounds: list, scratch_dir: Path, opts: dict) -> list:
+    date_start, date_end = opts['date_start'], opts['date_end']
+    check_bounds_size(bounds)
+    granules = get_granules(bounds, date_start, date_end)
+    slcs_for_chips = pair_slcs_to_chips(terra_mind_chips, granules, opts['strategy'])
+    assert len(slcs_for_chips) == len(terra_mind_chips)
+
+    rtc_paths_for_chips = get_rtcs_for(slcs_for_chips, scratch_dir)
+
+    return rtc_paths_for_chips
+
+
+def check_bounds_size(bounds: list[int]) -> None:
+    min_lon, min_lat, max_lon, max_lat = bounds
+    MAX_BOUND_AREA_DEGREES = 3
+    bounds_area_degrees = (max_lon - min_lon) * (max_lat - min_lat)
+
+    err_message = f'Bounds area is to large ({bounds_area_degrees}). Must be less than {MAX_BOUND_AREA_DEGREES} degrees'
+    assert bounds_area_degrees < MAX_BOUND_AREA_DEGREES, err_message
+
+
+def get_granules(bounds: list[int], date_start: datetime, date_end: datetime) -> list:
+    date_start = date_start
+    date_end = date_end + timedelta(days=1)  # inclusive end
+    roi = shapely.box(*bounds)
+    search_results = asf.geo_search(
+        intersectsWith=roi.wkt,
+        start=date_start,
+        end=date_end,
+        beamMode=asf.constants.BEAMMODE.IW,
+        polarization=asf.constants.POLARIZATION.VV_VH,
+        platform=asf.constants.PLATFORM.SENTINEL1,
+        processingLevel=asf.constants.PRODUCT_TYPE.SLC,
+    )
+
+    return search_results
+
+
+def pair_slcs_to_chips(chips: list, granules: list, strategy: str) -> dict:
+    slcs_for_chips = {}
+    for chip in chips:
+        chip_roi = shapely.box(*chip.bounds)
+        intersecting = [granule for granule in granules if get_pct_intersect(granule, chip_roi) > 95]
+        intersecting = sorted(intersecting, key=lambda g: (-get_pct_intersect(g, chip_roi), g.properties['startTime']))
+
+        if len(intersecting) < 1:
+            raise ValueError(f'No products found for chip {chip.name} in given date range')
+
+        if strategy == 'BEST':
+            intersecting = intersecting[:1]
+
+        slcs_for_chips[chip.name] = intersecting
+
+    return slcs_for_chips
+
+
+def get_rtcs_for(slcs_for_chips: dict, scratch_dir: Path) -> list:
+    flat_slcs = sum(slcs_for_chips.values(), [])
     slc_names = set(granule.properties['sceneName'] for granule in flat_slcs)
 
     hyp3 = hyp3_sdk.HyP3()
@@ -38,9 +95,11 @@ def get_rtcs_for(slcs_for_chips: list, scratch_dir: Path) -> list:
             hyp3_jobs.append(list(new_batch)[0])
 
     batch = hyp3_sdk.Batch(hyp3_jobs)
-    hyp3.watch(batch)
+    batch = hyp3.watch(batch)
 
-    assert all([j.succeeded() for j in batch]), 'One or more HyP3 jobs failed'
+    succeeded_jobs = [j.succeeded() for j in batch]
+
+    assert all(succeeded_jobs), 'One or more HyP3 jobs failed'
 
     paths_by_slc_name = {}
     for job in batch:
@@ -49,7 +108,10 @@ def get_rtcs_for(slcs_for_chips: list, scratch_dir: Path) -> list:
 
         paths_by_slc_name[slc_name] = rtc_path
 
-    rtc_paths_for_chips = [[paths_by_slc_name[name.properties['sceneName']] for name in chip_slcs] for chip_slcs in slcs_for_chips]
+    rtc_paths_for_chips = {}
+    for chip_name, chip_slcs in slcs_for_chips.items():
+        chip_paths = [paths_by_slc_name[name.properties['sceneName']] for name in chip_slcs]
+        rtc_paths_for_chips[chip_name] = chip_paths
 
     return rtc_paths_for_chips
 
