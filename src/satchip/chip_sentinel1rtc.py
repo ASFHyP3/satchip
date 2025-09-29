@@ -38,7 +38,7 @@ def check_bounds_size(bounds: list[float]) -> None:
     assert bounds_area_degrees < MAX_BOUND_AREA_DEGREES, err_message
 
 
-def get_granules(bounds: list[float], date_start: datetime, date_end: datetime) -> asf.AsfSearchResults:
+def get_granules(bounds: list[float], date_start: datetime, date_end: datetime) -> asf.ASFSearchResults:
     date_start = date_start
     date_end = date_end + timedelta(days=1)  # inclusive end
     roi = shapely.box(*bounds)
@@ -56,9 +56,9 @@ def get_granules(bounds: list[float], date_start: datetime, date_end: datetime) 
 
 
 def pair_slcs_to_chips(
-    chips: list[TerraMindChip], granules: asf.AsfSearchResults, strategy: str
-) -> dict[str, list[asf.AsfProduct]]:
-    slcs_for_chips: dict[str, list[asf.AsfProduct]] = {}
+    chips: list[TerraMindChip], granules: asf.ASFSearchResults, strategy: str
+) -> dict[str, list[asf.S1Product]]:
+    slcs_for_chips: dict[str, list[asf.S1Product]] = {}
 
     for chip in chips:
         chip_roi = shapely.box(*chip.bounds)
@@ -76,7 +76,7 @@ def pair_slcs_to_chips(
     return slcs_for_chips
 
 
-def get_rtcs_for(slcs_for_chips: dict[str, list[asf.AsfProduct]], scratch_dir: Path) -> dict[str, list[Path]]:
+def get_rtcs_for(slcs_for_chips: dict[str, list[asf.S1Product]], scratch_dir: Path) -> dict[str, list[Path]]:
     flat_slcs = sum(slcs_for_chips.values(), [])
     slc_names = set(granule.properties['sceneName'] for granule in flat_slcs)
 
