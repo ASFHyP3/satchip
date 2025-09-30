@@ -96,7 +96,7 @@ def test_pair_slcs_to_chips_with_different_strategies():
     chips = [chip1]
     granules = [granule1, granule2, granule3]
 
-    result = chip_sentinel1rtc._pair_slcs_to_chips(chips, granules, strategy='BEST', intersection_pct=50)
+    result = chip_sentinel1rtc._pair_slcs_to_chips(chips, granules, strategy='BEST', intersection_pct=49)
     assert result['chip1'] == [granule3]
 
     result = chip_sentinel1rtc._pair_slcs_to_chips(chips, granules, strategy='ALL', intersection_pct=49)
