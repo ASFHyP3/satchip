@@ -41,7 +41,7 @@ def test_get_granules():
         assert kwargs['end'] == date_end + datetime.timedelta(days=1)
 
 
-def test_pair_slcs_to_chips_custom_intersect():
+def test_get_slcs_for_each_chip_custom_intersect():
     granule1 = MagicMock()
     granule1.geometry = mapping(box(0, 0, 2, 2))
     granule1.properties = {'startTime': '2025-01-01T00:00:00Z'}
@@ -69,14 +69,14 @@ def test_pair_slcs_to_chips_custom_intersect():
     chips = [chip1, chip2, chip3]
     granules = [granule1, granule2, granule3]
 
-    result = chip_sentinel1rtc._pair_slcs_to_chips(chips, granules, strategy='BEST')
+    result = chip_sentinel1rtc._get_slcs_for_each_chip(chips, granules, strategy='BEST')
 
     assert result['chip1'] == [granule1]
     assert result['chip2'] == [granule1]
     assert result['chip3'] == [granule2]
 
 
-def test_pair_slcs_to_chips_with_different_strategies():
+def test_get_slcs_for_each_chip_with_different_strategies():
     granule1 = MagicMock()
     granule1.geometry = mapping(box(0, 0, 1, 1))
     granule1.properties = {'startTime': '2025-01-01T00:00:00Z'}
@@ -96,20 +96,20 @@ def test_pair_slcs_to_chips_with_different_strategies():
     chips = [chip1]
     granules = [granule1, granule2, granule3]
 
-    result = chip_sentinel1rtc._pair_slcs_to_chips(chips, granules, strategy='BEST', intersection_pct=49)
+    result = chip_sentinel1rtc._get_slcs_for_each_chip(chips, granules, strategy='BEST', intersection_pct=49)
     assert result['chip1'] == [granule3]
 
-    result = chip_sentinel1rtc._pair_slcs_to_chips(chips, granules, strategy='ALL', intersection_pct=49)
+    result = chip_sentinel1rtc._get_slcs_for_each_chip(chips, granules, strategy='ALL', intersection_pct=49)
     assert result['chip1'] == [granule3, granule2]
 
 
-def test_pair_slcs_to_chips_no_matches():
+def test_get_slcs_for_each_chip_no_matches():
     chip = MagicMock()
     chip.name = 'chip1'
     chip.bounds = [0, 0, 1, 1]
 
     with pytest.raises(ValueError, match='No products found for chip chip1'):
-        chip_sentinel1rtc._pair_slcs_to_chips([chip], [], strategy='BEST')
+        chip_sentinel1rtc._get_slcs_for_each_chip([chip], [], strategy='BEST')
 
 
 class MockS1Product:

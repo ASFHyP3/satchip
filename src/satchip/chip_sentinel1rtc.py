@@ -18,14 +18,12 @@ from satchip.terra_mind_grid import TerraMindChip
 def get_rtc_paths_for_chips(
     terra_mind_chips: list[TerraMindChip], bounds: list[float], scratch_dir: Path, opts: utils.ChipDataOpts
 ) -> dict[str, list[Path]]:
-    date_start, date_end = opts['date_start'], opts['date_end']
     _check_bounds_size(bounds)
-    granules = _get_granules(bounds, date_start, date_end)
-    slcs_for_chips = _pair_slcs_to_chips(terra_mind_chips, granules, opts['strategy'])
+    granules = _get_granules(bounds, opts['date_start'], opts['date_end'])
+    slcs_for_chips = _get_slcs_for_each_chip(terra_mind_chips, granules, opts['strategy'])
     assert len(slcs_for_chips) == len(terra_mind_chips)
 
     rtc_paths_for_chips = _get_rtcs_for(slcs_for_chips, scratch_dir)
-
     return rtc_paths_for_chips
 
 
@@ -55,7 +53,7 @@ def _get_granules(bounds: list[float], date_start: datetime, date_end: datetime)
     return list(search_results)
 
 
-def _pair_slcs_to_chips(
+def _get_slcs_for_each_chip(
     chips: list[TerraMindChip], granules: list[asf.S1Product], strategy: str, intersection_pct: int = 95
 ) -> dict[str, list[asf.S1Product]]:
     slcs_for_chips: dict[str, list[asf.S1Product]] = {}
@@ -69,9 +67,9 @@ def _pair_slcs_to_chips(
             raise ValueError(f'No products found for chip {chip.name} in given date range')
 
         if strategy == 'BEST':
-            intersecting = intersecting[:1]
-
-        slcs_for_chips[chip.name] = intersecting
+            slcs_for_chips[chip.name] = intersecting[:1]
+        else:
+            slcs_for_chips[chip.name] = intersecting
 
     return slcs_for_chips
 
