@@ -10,12 +10,9 @@ from tqdm import tqdm
 import satchip
 from satchip import utils
 from satchip.chip_hls import get_hls_data
-from satchip.chip_sentinel1rtc import get_s1rtc_data
+from satchip.chip_sentinel1rtc import get_rtc_paths_for_chips, get_s1rtc_chip_data
 from satchip.chip_sentinel2 import get_s2l2a_data
 from satchip.terra_mind_grid import TerraMindGrid
-
-
-GET_DATA_FNS = {'S2L2A': get_s2l2a_data, 'S1RTC': get_s1rtc_data, 'HLS': get_hls_data}
 
 
 def fill_missing_times(data_chip: xr.DataArray, times: np.ndarray) -> xr.DataArray:
@@ -42,28 +39,35 @@ def chip_data(
     strategy: str,
     max_cloud_pct: int,
     output_dir: Path,
-    scratch_dir: Path | None = None,
+    scratch_dir: Path,
 ) -> xr.Dataset:
-    get_data_fn = GET_DATA_FNS[platform]
     labels = utils.load_chip(label_path)
     date = labels.time.data[0].astype('M8[ms]').astype(datetime)
     bounds = labels.attrs['bounds']
+
     grid = TerraMindGrid([bounds[1] - 1, bounds[3] + 1], [bounds[0] - 1, bounds[2] + 1])  # type: ignore
     terra_mind_chips = [c for c in grid.terra_mind_chips if c.name in list(labels.sample.data)]
 
-    opts = {'strategy': strategy, 'date_start': date_start, 'date_end': date_end}
+    opts: utils.ChipDataOpts = {'strategy': strategy, 'date_start': date_start, 'date_end': date_end}
     if platform in ['S2L2A', 'HLS']:
         opts['max_cloud_pct'] = max_cloud_pct
 
+    if platform == 'S1RTC':
+        rtc_paths_for_chips = get_rtc_paths_for_chips(terra_mind_chips, bounds, scratch_dir, opts)
+
     data_chips = []
-    if scratch_dir is not None:
-        for chip in tqdm(terra_mind_chips):
-            data_chips.append(get_data_fn(chip, scratch_dir, opts=opts))
-    else:
-        with TemporaryDirectory() as tmp_dir:
-            scratch_dir = Path(tmp_dir)
-            for chip in tqdm(terra_mind_chips):
-                data_chips.append(get_data_fn(chip, scratch_dir, opts=opts))
+    for chip in tqdm(terra_mind_chips):
+        if platform == 'S1RTC':
+            rtc_paths = rtc_paths_for_chips[chip.name]
+            chip_data = get_s1rtc_chip_data(chip, rtc_paths, scratch_dir, opts=opts)
+        elif platform == 'S2L2A':
+            chip_data = get_s2l2a_data(chip, scratch_dir, opts=opts)
+        elif platform == 'HLS':
+            chip_data = get_hls_data(chip, scratch_dir, opts=opts)
+        else:
+            raise Exception(f'Unknown platform {platform}')
+
+        data_chips.append(chip_data)
 
     times = np.unique(np.concatenate([dc.time.data for dc in data_chips]))
     for i, data_chip in enumerate(data_chips):
@@ -99,7 +103,8 @@ def main() -> None:
     assert 0 <= args.maxcloudpct <= 100, 'maxcloudpct must be between 0 and 100'
     date_start, date_end = [datetime.strptime(d, '%Y%m%d') for d in args.daterange.split('-')]
     assert date_start < date_end, 'start date must be before end date'
-    chip_data(
+
+    params = (
         args.labelpath,
         args.platform,
         date_start,
@@ -107,8 +112,14 @@ def main() -> None:
         args.strategy,
         args.maxcloudpct,
         args.outdir,
-        args.scratchdir,
     )
+
+    if args.scratchdir is not None:
+        chip_data(*params, args.scratchdir)
+    else:
+        with TemporaryDirectory() as tmp_dir:
+            scratch_dir = Path(tmp_dir)
+            chip_data(*params, scratch_dir)
 
 
 if __name__ == '__main__':

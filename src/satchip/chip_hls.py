@@ -8,6 +8,7 @@ import shapely
 import xarray as xr
 from earthaccess.results import DataGranule
 
+from satchip import utils
 from satchip.chip_xr_base import create_template_da
 from satchip.terra_mind_grid import TerraMindChip
 
@@ -93,7 +94,7 @@ def get_scenes(
     return valid_scenes
 
 
-def get_hls_data(chip: TerraMindChip, scratch_dir: Path, opts: dict) -> xr.DataArray:
+def get_hls_data(chip: TerraMindChip, scratch_dir: Path, opts: utils.ChipDataOpts) -> xr.DataArray:
     """Returns XArray DataArray of a Harmonized Landsat Sentinel-2 image for the given bounds and
     closest collection after date.
     """

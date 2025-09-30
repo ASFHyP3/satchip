@@ -1,8 +1,20 @@
+import datetime
 from pathlib import Path
+from typing import TypedDict
 
 import xarray as xr
 import zarr
 from pyproj import CRS, Transformer
+
+
+class ChipDataRequiredOpts(TypedDict):
+    strategy: str
+    date_start: datetime.datetime
+    date_end: datetime.datetime
+
+
+class ChipDataOpts(ChipDataRequiredOpts, total=False):
+    max_cloud_pct: int
 
 
 def get_epsg4326_point(x: float, y: float, in_epsg: int) -> tuple[float, float]:
