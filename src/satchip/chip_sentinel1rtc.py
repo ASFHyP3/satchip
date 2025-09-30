@@ -19,17 +19,17 @@ def get_rtc_paths_for_chips(
     terra_mind_chips: list[TerraMindChip], bounds: list[float], scratch_dir: Path, opts: utils.ChipDataOpts
 ) -> dict[str, list[Path]]:
     date_start, date_end = opts['date_start'], opts['date_end']
-    check_bounds_size(bounds)
-    granules = get_granules(bounds, date_start, date_end)
-    slcs_for_chips = pair_slcs_to_chips(terra_mind_chips, granules, opts['strategy'])
+    _check_bounds_size(bounds)
+    granules = _get_granules(bounds, date_start, date_end)
+    slcs_for_chips = _pair_slcs_to_chips(terra_mind_chips, granules, opts['strategy'])
     assert len(slcs_for_chips) == len(terra_mind_chips)
 
-    rtc_paths_for_chips = get_rtcs_for(slcs_for_chips, scratch_dir)
+    rtc_paths_for_chips = _get_rtcs_for(slcs_for_chips, scratch_dir)
 
     return rtc_paths_for_chips
 
 
-def check_bounds_size(bounds: list[float]) -> None:
+def _check_bounds_size(bounds: list[float]) -> None:
     min_lon, min_lat, max_lon, max_lat = bounds
     MAX_BOUND_AREA_DEGREES = 3
     bounds_area_degrees = (max_lon - min_lon) * (max_lat - min_lat)
@@ -38,7 +38,7 @@ def check_bounds_size(bounds: list[float]) -> None:
     assert bounds_area_degrees < MAX_BOUND_AREA_DEGREES, err_message
 
 
-def get_granules(bounds: list[float], date_start: datetime, date_end: datetime) -> list[asf.S1Product]:
+def _get_granules(bounds: list[float], date_start: datetime, date_end: datetime) -> list[asf.S1Product]:
     date_start = date_start
     date_end = date_end + timedelta(days=1)  # inclusive end
     roi = shapely.box(*bounds)
@@ -55,15 +55,15 @@ def get_granules(bounds: list[float], date_start: datetime, date_end: datetime) 
     return list(search_results)
 
 
-def pair_slcs_to_chips(
+def _pair_slcs_to_chips(
     chips: list[TerraMindChip], granules: list[asf.S1Product], strategy: str, intersection_pct: int = 95
 ) -> dict[str, list[asf.S1Product]]:
     slcs_for_chips: dict[str, list[asf.S1Product]] = {}
 
     for chip in chips:
         chip_roi = shapely.box(*chip.bounds)
-        intersecting = [granule for granule in granules if get_pct_intersect(granule, chip_roi) > intersection_pct]
-        intersecting = sorted(intersecting, key=lambda g: (-get_pct_intersect(g, chip_roi), g.properties['startTime']))
+        intersecting = [granule for granule in granules if _get_pct_intersect(granule, chip_roi) > intersection_pct]
+        intersecting = sorted(intersecting, key=lambda g: (-_get_pct_intersect(g, chip_roi), g.properties['startTime']))
 
         if len(intersecting) < 1:
             raise ValueError(f'No products found for chip {chip.name} in given date range')
@@ -74,6 +74,12 @@ def pair_slcs_to_chips(
         slcs_for_chips[chip.name] = intersecting
 
     return slcs_for_chips
+
+
+def _get_pct_intersect(product: asf.S1Product, roi: shapely.geometry.Polygon) -> int:
+    footprint = shapely.geometry.shape(product.geometry)
+    intersection = int(np.round(100 * roi.intersection(footprint).area / roi.area))
+    return intersection
 
 
 def _get_rtc_jobs_by_scene_name(hyp3: hyp3_sdk.HyP3) -> dict[str, hyp3_sdk.Job]:
@@ -89,27 +95,16 @@ def _get_rtc_jobs_by_scene_name(hyp3: hyp3_sdk.HyP3) -> dict[str, hyp3_sdk.Job]:
     return jobs_by_scene_name
 
 
-def _process_rtcs(slc_names: set[str]) -> hyp3_sdk.Batch:
-    hyp3 = hyp3_sdk.HyP3()
-    jobs_by_scene_name = _get_rtc_jobs_by_scene_name(hyp3)
-
-    hyp3_jobs = []
-    for slc_name in slc_names:
-        if slc_name in jobs_by_scene_name:
-            job = jobs_by_scene_name[slc_name]
-            hyp3_jobs.append(job)
-        else:
-            new_batch = hyp3.submit_rtc_job(slc_name, radiometry='gamma0', resolution=20)
-            hyp3_jobs.append(list(new_batch)[0])
-
-    batch = hyp3_sdk.Batch(hyp3_jobs)
-    batch = hyp3.watch(batch)
-    assert all([j.succeeded() for j in batch]), 'One or more HyP3 jobs failed'
-
-    return batch
+def _is_valid_rtc_job(job: hyp3_sdk.Job) -> bool:
+    return (
+        not job.failed()
+        and not job.expired()
+        and job.job_parameters['radiometry'] == 'gamma0'
+        and job.job_parameters['resolution'] == 20
+    )
 
 
-def get_rtcs_for(slcs_for_chips: dict[str, list[asf.S1Product]], scratch_dir: Path) -> dict[str, list[Path]]:
+def _get_rtcs_for(slcs_for_chips: dict[str, list[asf.S1Product]], scratch_dir: Path) -> dict[str, list[Path]]:
     flat_slcs = sum(slcs_for_chips.values(), [])
     slc_names = set(granule.properties['sceneName'] for granule in flat_slcs)
 
@@ -130,19 +125,24 @@ def get_rtcs_for(slcs_for_chips: dict[str, list[asf.S1Product]], scratch_dir: Pa
     return rtc_paths_for_chips
 
 
-def _is_valid_rtc_job(job: hyp3_sdk.Job) -> bool:
-    return (
-        not job.failed()
-        and not job.expired()
-        and job.job_parameters['radiometry'] == 'gamma0'
-        and job.job_parameters['resolution'] == 20
-    )
+def _process_rtcs(slc_names: set[str]) -> hyp3_sdk.Batch:
+    hyp3 = hyp3_sdk.HyP3()
+    jobs_by_scene_name = _get_rtc_jobs_by_scene_name(hyp3)
 
+    hyp3_jobs = []
+    for slc_name in slc_names:
+        if slc_name in jobs_by_scene_name:
+            job = jobs_by_scene_name[slc_name]
+            hyp3_jobs.append(job)
+        else:
+            new_batch = hyp3.submit_rtc_job(slc_name, radiometry='gamma0', resolution=20)
+            hyp3_jobs.append(list(new_batch)[0])
 
-def get_pct_intersect(product: asf.S1Product, roi: shapely.geometry.Polygon) -> int:
-    footprint = shapely.geometry.shape(product.geometry)
-    intersection = int(np.round(100 * roi.intersection(footprint).area / roi.area))
-    return intersection
+    batch = hyp3_sdk.Batch(hyp3_jobs)
+    batch = hyp3.watch(batch)
+    assert all([j.succeeded() for j in batch]), 'One or more HyP3 jobs failed'
+
+    return batch
 
 
 def _download_hyp3_rtc(job: Job, scratch_dir: Path) -> tuple[Path, Path]:

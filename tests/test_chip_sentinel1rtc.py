@@ -9,12 +9,12 @@ from satchip import chip_sentinel1rtc
 
 
 def test_bounds_check():
-    chip_sentinel1rtc.check_bounds_size([0, 0, 1, 1])
-    chip_sentinel1rtc.check_bounds_size([0, 0, 2.9, 1])
-    chip_sentinel1rtc.check_bounds_size([-107.79192, 45.74287, -105.01543, 46.48598])
+    chip_sentinel1rtc._check_bounds_size([0, 0, 1, 1])
+    chip_sentinel1rtc._check_bounds_size([0, 0, 2.9, 1])
+    chip_sentinel1rtc._check_bounds_size([-107.79192, 45.74287, -105.01543, 46.48598])
 
     with pytest.raises(AssertionError):
-        chip_sentinel1rtc.check_bounds_size([0, 0, 3, 1])
+        chip_sentinel1rtc._check_bounds_size([0, 0, 3, 1])
 
 
 def test_get_granules():
@@ -26,7 +26,7 @@ def test_get_granules():
     mock_search_result = ['granule1', 'granule2']
 
     with patch('satchip.chip_sentinel1rtc.asf.geo_search', return_value=mock_search_result) as mock_geo_search:
-        results = chip_sentinel1rtc.get_granules(bounds, date_start, date_end)
+        results = chip_sentinel1rtc._get_granules(bounds, date_start, date_end)
 
         mock_geo_search.assert_called_once()
 
@@ -69,7 +69,7 @@ def test_pair_slcs_to_chips_custom_intersect():
     chips = [chip1, chip2, chip3]
     granules = [granule1, granule2, granule3]
 
-    result = chip_sentinel1rtc.pair_slcs_to_chips(chips, granules, strategy='BEST')
+    result = chip_sentinel1rtc._pair_slcs_to_chips(chips, granules, strategy='BEST')
 
     assert result['chip1'] == [granule1]
     assert result['chip2'] == [granule1]
@@ -96,10 +96,10 @@ def test_pair_slcs_to_chips_with_different_strategies():
     chips = [chip1]
     granules = [granule1, granule2, granule3]
 
-    result = chip_sentinel1rtc.pair_slcs_to_chips(chips, granules, strategy='BEST', intersection_pct=50)
+    result = chip_sentinel1rtc._pair_slcs_to_chips(chips, granules, strategy='BEST', intersection_pct=50)
     assert result['chip1'] == [granule3]
 
-    result = chip_sentinel1rtc.pair_slcs_to_chips(chips, granules, strategy='ALL', intersection_pct=49)
+    result = chip_sentinel1rtc._pair_slcs_to_chips(chips, granules, strategy='ALL', intersection_pct=49)
     assert result['chip1'] == [granule3, granule2]
 
 
@@ -109,7 +109,7 @@ def test_pair_slcs_to_chips_no_matches():
     chip.bounds = [0, 0, 1, 1]
 
     with pytest.raises(ValueError, match='No products found for chip chip1'):
-        chip_sentinel1rtc.pair_slcs_to_chips([chip], [], strategy='BEST')
+        chip_sentinel1rtc._pair_slcs_to_chips([chip], [], strategy='BEST')
 
 
 class MockS1Product:
@@ -140,7 +140,7 @@ def test_get_rtcs_for():
 
         mock_download.side_effect = mock_download_fn
 
-        result = chip_sentinel1rtc.get_rtcs_for(slcs_for_chips, scratch_dir)
+        result = chip_sentinel1rtc._get_rtcs_for(slcs_for_chips, scratch_dir)
 
         expected = {
             'chip_001': [Path('/tmp/SLC_1_rtc.tif'), Path('/tmp/SLC_2_rtc.tif')],
