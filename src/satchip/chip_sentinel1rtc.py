@@ -82,28 +82,6 @@ def _get_pct_intersect(product: asf.S1Product, roi: shapely.geometry.Polygon) ->
     return intersection
 
 
-def _get_rtc_jobs_by_scene_name(hyp3: hyp3_sdk.HyP3) -> dict[str, hyp3_sdk.Job]:
-    jobs_by_scene_name = {}
-
-    for job in hyp3.find_jobs(job_type='RTC_GAMMA'):
-        if not _is_valid_rtc_job(job):
-            continue
-
-        name = job.job_parameters['granules'][0]
-        jobs_by_scene_name[name] = job
-
-    return jobs_by_scene_name
-
-
-def _is_valid_rtc_job(job: hyp3_sdk.Job) -> bool:
-    return (
-        not job.failed()
-        and not job.expired()
-        and job.job_parameters['radiometry'] == 'gamma0'
-        and job.job_parameters['resolution'] == 20
-    )
-
-
 def _get_rtcs_for(slcs_for_chips: dict[str, list[asf.S1Product]], scratch_dir: Path) -> dict[str, list[Path]]:
     flat_slcs = sum(slcs_for_chips.values(), [])
     slc_names = set(granule.properties['sceneName'] for granule in flat_slcs)
@@ -143,6 +121,28 @@ def _process_rtcs(slc_names: set[str]) -> hyp3_sdk.Batch:
     assert all([j.succeeded() for j in batch]), 'One or more HyP3 jobs failed'
 
     return batch
+
+
+def _get_rtc_jobs_by_scene_name(hyp3: hyp3_sdk.HyP3) -> dict[str, hyp3_sdk.Job]:
+    jobs_by_scene_name = {}
+
+    for job in hyp3.find_jobs(job_type='RTC_GAMMA'):
+        if not _is_valid_rtc_job(job):
+            continue
+
+        name = job.job_parameters['granules'][0]
+        jobs_by_scene_name[name] = job
+
+    return jobs_by_scene_name
+
+
+def _is_valid_rtc_job(job: hyp3_sdk.Job) -> bool:
+    return (
+        not job.failed()
+        and not job.expired()
+        and job.job_parameters['radiometry'] == 'gamma0'
+        and job.job_parameters['resolution'] == 20
+    )
 
 
 def _download_hyp3_rtc(job: Job, scratch_dir: Path) -> tuple[Path, Path]:
