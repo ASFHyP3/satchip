@@ -11,6 +11,9 @@ and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 * For the S1RTC platform `chipdata` now processes and download all nessary RTC prior to getting individual chip data.
 
+### Fixed
+* Fix fmask path when chipping HLS data
+
 ## [0.3.0]
 
 ### Added
