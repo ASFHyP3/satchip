@@ -7,8 +7,6 @@ import numpy as np
 import rioxarray
 import shapely
 import xarray as xr
-from hyp3_sdk import Job
-from hyp3_sdk.util import extract_zipped_product
 
 from satchip import utils
 from satchip.chip_xr_base import create_template_da
@@ -143,13 +141,13 @@ def _is_valid_rtc_job(job: hyp3_sdk.Job) -> bool:
     )
 
 
-def _download_hyp3_rtc(job: Job, scratch_dir: Path) -> tuple[Path, Path]:
+def _download_hyp3_rtc(job: hyp3_sdk.Job, scratch_dir: Path) -> tuple[Path, Path]:
     output_path = scratch_dir / job.to_dict()['files'][0]['filename']
     output_dir = output_path.with_suffix('')
     output_zip = output_path.with_suffix('.zip')
     if not output_dir.exists():
         job.download_files(location=scratch_dir)
-        extract_zipped_product(output_zip)
+        hyp3_sdk.util.extract_zipped_product(output_zip)
     vv_path = list(output_dir.glob('*_VV.tif'))[0]
     vh_path = list(output_dir.glob('*_VH.tif'))[0]
     return vv_path, vh_path
