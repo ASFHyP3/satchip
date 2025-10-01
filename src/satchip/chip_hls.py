@@ -8,6 +8,7 @@ import shapely
 import xarray as xr
 from earthaccess.results import DataGranule
 
+from satchip import utils
 from satchip.chip_xr_base import create_template_da
 from satchip.terra_mind_grid import TerraMindChip
 
@@ -76,7 +77,7 @@ def get_scenes(
         n_products = len(list(scratch_dir.glob(f'{product_id}*')))
         if n_products < 15:
             earthaccess.download([item], scratch_dir, pqdm_kwargs={'disable': True})
-        fmask_path = scratch_dir / f'{product_id}.v2.0.FMask.tif'
+        fmask_path = scratch_dir / f'{product_id}.v2.0.Fmask.tif'
         assert fmask_path.exists(), f'File not found: {fmask_path}'
         qual_da = rioxarray.open_rasterio(fmask_path).rio.clip_box(*roi.bounds, crs='EPSG:4326')  # type: ignore
         bit_masks = np.unpackbits(qual_da.data[0][..., np.newaxis], axis=-1)
@@ -93,7 +94,7 @@ def get_scenes(
     return valid_scenes
 
 
-def get_hls_data(chip: TerraMindChip, scratch_dir: Path, opts: dict) -> xr.DataArray:
+def get_hls_data(chip: TerraMindChip, scratch_dir: Path, opts: utils.ChipDataOpts) -> xr.DataArray:
     """Returns XArray DataArray of a Harmonized Landsat Sentinel-2 image for the given bounds and
     closest collection after date.
     """
