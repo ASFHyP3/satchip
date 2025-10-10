@@ -63,26 +63,6 @@ def chip_labels(label_path: Path, date: datetime, output_dir: Path) -> Path:
             output_path = label_dir / f'{label_path.stem}_{tm_chip.name}.zarr.zip'
             utils.save_chip(dataset, output_path)
 
-    # coords = {
-    #     'time': np.array([date]),
-    #     'band': np.array(['label']),
-    #     'sample': np.array([str(x) for x in chips.keys()]),
-    #     'y': np.arange(0, chip_array.shape[0]),
-    #     'x': np.arange(0, chip_array.shape[1]),
-    # }
-    # print(f'Found {len(chips)} valid chips for {label_path.name}')
-    # label_np = np.expand_dims(np.stack([val[0] for val in chips.values()], axis=0), axis=[0, 1])
-    # lats, lons = zip(*[val[1].center for val in chips.values()])
-    #
-    # dataset = xr.Dataset(attrs={'date_created': date.isoformat(), 'satchip_version': satchip.__version__})
-    # dataset.attrs['bounds'] = get_overall_bounds([val[1].bounds for val in chips.values()])
-    # dataset['bands'] = xr.DataArray(label_np, coords=coords, dims=list(coords.keys()))
-    # dataset['lats'] = xr.DataArray(np.array(lats), coords={'sample': coords['sample']}, dims=['sample'])
-    # dataset['lons'] = xr.DataArray(np.array(lons), coords={'sample': coords['sample']}, dims=['sample'])
-    # output_path = output_dir / label_path.with_suffix('.zarr.zip').name
-    # utils.save_chip(dataset, output_path)
-    # return output_path
-
 
 def main() -> None:
     parser = argparse.ArgumentParser(description='Chip a label image')
