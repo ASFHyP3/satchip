@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 import satchip
 from satchip import utils
-from satchip.terra_mind_grid import TerraMindGrid
+from satchip.terra_mind_grid import TerraMindChip, TerraMindGrid
 
 
 def get_overall_bounds(bounds: list) -> list:
@@ -25,11 +25,29 @@ def is_valuable(chip: np.ndarray) -> bool:
     return not vals == [0]
 
 
+def create_dataset_chip(chip_array: np.ndarray, tm_chip: TerraMindChip, bands: list[str], date: datetime) -> xr.Dataset:
+    x = tm_chip.minx + (np.arange(tm_chip.nrow) + 0.5) * tm_chip.xres
+    y = tm_chip.maxy + (np.arange(tm_chip.ncol) + 0.5) * tm_chip.yres
+    coords = {'time': np.array([date]), 'band': np.array(bands), 'y': y, 'x': x}
+    dataset = xr.Dataset(attrs={'date_created': date.isoformat(), 'satchip_version': satchip.__version__})
+    dataset.attrs['bounds'] = tm_chip.bounds
+    dataset = dataset.assign_coords(sample=tm_chip.name)
+    dataset = dataset.rio.write_crs(f'EPSG:{tm_chip.epsg}')
+    shape = (1, 1, tm_chip.ncol, tm_chip.nrow)
+    dataset['bands'] = xr.DataArray(chip_array.reshape(*shape), coords=coords, dims=['time', 'band', 'y', 'x'])
+    dataset['center_lat'] = xr.DataArray(tm_chip.center[1])
+    dataset['center_lon'] = xr.DataArray(tm_chip.center[0])
+    dataset['crs'] = xr.DataArray(tm_chip.epsg)
+    utils.check_spec(dataset)
+    return dataset
+
+
 def chip_labels(label_path: Path, date: datetime, output_dir: Path) -> Path:
+    label_dir = output_dir / 'LABEL'
+    label_dir.mkdir(parents=True, exist_ok=True)
     label = xr.open_dataarray(label_path)
     bbox = utils.get_epsg4326_bbox(label.rio.bounds(), label.rio.crs.to_epsg())
     tm_grid = TerraMindGrid(latitude_range=(bbox[1], bbox[3]), longitude_range=(bbox[0], bbox[2]))
-    chips = {}
     for tm_chip in tqdm(tm_grid.terra_mind_chips):
         chip = label.rio.reproject(
             dst_crs=f'EPSG:{tm_chip.epsg}',
@@ -41,30 +59,29 @@ def chip_labels(label_path: Path, date: datetime, output_dir: Path) -> Path:
         chip_array[np.isnan(chip_array)] = 0
         chip_array = np.round(chip_array).astype(np.int16)
         if is_valuable(chip_array):
-            chips[tm_chip.name] = [chip_array, tm_chip]
+            dataset = create_dataset_chip(chip_array, tm_chip, ['label'], date)
+            output_path = label_dir / f'{label_path.stem}_{tm_chip.name}.zarr.zip'
+            utils.save_chip(dataset, output_path)
 
-    if len(chips) == 0:
-        raise ValueError(f'No valid chips found for {label_path.name}')
-
-    coords = {
-        'time': np.array([date]),
-        'band': np.array(['labels']),
-        'sample': np.array([str(x) for x in chips.keys()]),
-        'y': np.arange(0, chip_array.shape[0]),
-        'x': np.arange(0, chip_array.shape[1]),
-    }
-    print(f'Found {len(chips)} valid chips for {label_path.name}')
-    label_np = np.expand_dims(np.stack([val[0] for val in chips.values()], axis=0), axis=[0, 1])
-    lats, lons = zip(*[val[1].center for val in chips.values()])
-
-    dataset = xr.Dataset(attrs={'date_created': date.isoformat(), 'satchip_version': satchip.__version__})
-    dataset.attrs['bounds'] = get_overall_bounds([val[1].bounds for val in chips.values()])
-    dataset['bands'] = xr.DataArray(label_np, coords=coords, dims=list(coords.keys()))
-    dataset['lats'] = xr.DataArray(np.array(lats), coords={'sample': coords['sample']}, dims=['sample'])
-    dataset['lons'] = xr.DataArray(np.array(lons), coords={'sample': coords['sample']}, dims=['sample'])
-    output_path = output_dir / label_path.with_suffix('.zarr.zip').name
-    utils.save_chip(dataset, output_path)
-    return output_path
+    # coords = {
+    #     'time': np.array([date]),
+    #     'band': np.array(['label']),
+    #     'sample': np.array([str(x) for x in chips.keys()]),
+    #     'y': np.arange(0, chip_array.shape[0]),
+    #     'x': np.arange(0, chip_array.shape[1]),
+    # }
+    # print(f'Found {len(chips)} valid chips for {label_path.name}')
+    # label_np = np.expand_dims(np.stack([val[0] for val in chips.values()], axis=0), axis=[0, 1])
+    # lats, lons = zip(*[val[1].center for val in chips.values()])
+    #
+    # dataset = xr.Dataset(attrs={'date_created': date.isoformat(), 'satchip_version': satchip.__version__})
+    # dataset.attrs['bounds'] = get_overall_bounds([val[1].bounds for val in chips.values()])
+    # dataset['bands'] = xr.DataArray(label_np, coords=coords, dims=list(coords.keys()))
+    # dataset['lats'] = xr.DataArray(np.array(lats), coords={'sample': coords['sample']}, dims=['sample'])
+    # dataset['lons'] = xr.DataArray(np.array(lons), coords={'sample': coords['sample']}, dims=['sample'])
+    # output_path = output_dir / label_path.with_suffix('.zarr.zip').name
+    # utils.save_chip(dataset, output_path)
+    # return output_path
 
 
 def main() -> None:
