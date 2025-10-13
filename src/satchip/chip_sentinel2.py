@@ -1,3 +1,4 @@
+from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -12,24 +13,26 @@ from pystac.item import Item
 from pystac_client import Client
 
 from satchip import utils
-from satchip.chip_xr_base import create_template_da
+from satchip.chip_xr_base import create_dataset_chip, create_template_da
 from satchip.terra_mind_grid import TerraMindChip
 
 
-S2_BANDS = {
-    'B01': 'COASTAL',
-    'B02': 'BLUE',
-    'B03': 'GREEN',
-    'B04': 'RED',
-    'B05': 'REDEDGE1',
-    'B06': 'REDEDGE2',
-    'B07': 'REDEDGE3',
-    'B08': 'NIR',
-    'B8A': 'NIR08',
-    'B09': 'NIR09',
-    'B11': 'SWIR16',
-    'B12': 'SWIR22',
-}
+S2_BANDS = OrderedDict(
+    {
+        'B01': 'COASTAL',
+        'B02': 'BLUE',
+        'B03': 'GREEN',
+        'B04': 'RED',
+        'B05': 'REDEDGE1',
+        'B06': 'REDEDGE2',
+        'B07': 'REDEDGE3',
+        'B08': 'NIR',
+        'B8A': 'NIR08',
+        'B09': 'NIR09',
+        'B11': 'SWIR16',
+        'B12': 'SWIR22',
+    }
+)
 
 S3_FS = s3fs.S3FileSystem(anon=True)
 
@@ -128,7 +131,7 @@ def get_scenes(
     return valid_scenes
 
 
-def get_s2l2a_data(chip: TerraMindChip, scratch_dir: Path, opts: utils.ChipDataOpts) -> xr.DataArray:
+def get_s2l2a_data(chip: TerraMindChip, scratch_dir: Path, opts: utils.ChipDataOpts) -> xr.Dataset:
     """Get XArray DataArray of Sentinel-2 L2A image for the given bounds and best collection parameters.
 
     Args:
@@ -141,7 +144,7 @@ def get_s2l2a_data(chip: TerraMindChip, scratch_dir: Path, opts: utils.ChipDataO
             - max_cloud_pct (optional): Maximum percent of bad pixels allowed in the scene.
 
     Returns:
-        XArray DataArray containing the Sentinel-2 L2A image data.
+        XArray Dataset containing the Sentinel-2 L2A image data.
     """
     date_start = opts['date_start']
     date_end = opts['date_end'] + timedelta(days=1)  # inclusive end
@@ -158,28 +161,28 @@ def get_s2l2a_data(chip: TerraMindChip, scratch_dir: Path, opts: utils.ChipDataO
     assert len(search.item_collection()) > 0, (
         f'No Sentinel-2 L2A scenes found for chip {chip.name} between {date_start} and {date_end}.'
     )
+    assert len(search.item_collection()) < 1000, (
+        'Too many Sentinel-2 L2A scenes found for chip. Please narrow the date range.'
+    )
     items = list(search.item_collection())
     max_cloud_pct = opts.get('max_cloud_pct', 100)
     strategy = opts.get('strategy', 'BEST')
-    items = get_scenes(items, roi, strategy, max_cloud_pct, scratch_dir)
+    timesteps = get_scenes(items, roi, strategy, max_cloud_pct, scratch_dir)
     urls = [item.assets[S2_BANDS[band].lower()].href for item in items for band in S2_BANDS]
     multithread_fetch_s3_file(urls, scratch_dir)
     template = create_template_da(chip)
-    das = []
-    for item in items:
+    timestep_arrays = []
+    for item in timesteps:
+        band_arrays = []
         for band in S2_BANDS:
             local_path = url_to_localpath(item.assets[S2_BANDS[band].lower()].href, scratch_dir)
             assert local_path.exists(), f'File not found: {local_path}'
             da = rioxarray.open_rasterio(local_path).rio.clip_box(*roi_buffered.bounds, crs='EPSG:4326')  # type: ignore
             da_reproj = da.rio.reproject_match(template)
-            da_reproj['band'] = [S2_BANDS[band]]
-            da_reproj = da_reproj.expand_dims({'time': [item.datetime.replace(tzinfo=None)]})  # type: ignore
-            da_reproj['x'] = np.arange(0, chip.ncol)
-            da_reproj['y'] = np.arange(0, chip.nrow)
-            da_reproj.attrs = {}
-            das.append(da_reproj)
-    dataarray = xr.combine_by_coords(das, join='override').drop_vars('spatial_ref')
-    assert isinstance(dataarray, xr.DataArray)
-    dataarray = dataarray.expand_dims({'sample': [chip.name], 'platform': ['S2L2A']})
-    dataarray.attrs = {}
-    return dataarray
+            band_arrays.append(da_reproj.data.squeeze())
+        band_array = np.stack(band_arrays, axis=0)
+        timestep_arrays.append(band_array)
+    data_array = np.stack(timestep_arrays, axis=0)
+    dates = [item.datetime.replace(tzinfo=None) for item in timesteps]  # type: ignore
+    dataset = create_dataset_chip(data_array, chip, dates, list(S2_BANDS.values()))
+    return dataset

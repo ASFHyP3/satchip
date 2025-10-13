@@ -7,9 +7,9 @@ import rasterio as rio
 import xarray as xr
 from tqdm import tqdm
 
-import satchip
 from satchip import utils
-from satchip.terra_mind_grid import TerraMindChip, TerraMindGrid
+from satchip.chip_xr_base import create_dataset_chip
+from satchip.terra_mind_grid import TerraMindGrid
 
 
 def get_overall_bounds(bounds: list) -> list:
@@ -25,23 +25,6 @@ def is_valuable(chip: np.ndarray) -> bool:
     return not vals == [0]
 
 
-def create_dataset_chip(chip_array: np.ndarray, tm_chip: TerraMindChip, bands: list[str], date: datetime) -> xr.Dataset:
-    x = tm_chip.minx + (np.arange(tm_chip.nrow) + 0.5) * tm_chip.xres
-    y = tm_chip.maxy + (np.arange(tm_chip.ncol) + 0.5) * tm_chip.yres
-    coords = {'time': np.array([date]), 'band': np.array(bands), 'y': y, 'x': x}
-    dataset = xr.Dataset(attrs={'date_created': date.isoformat(), 'satchip_version': satchip.__version__})
-    dataset.attrs['bounds'] = tm_chip.bounds
-    dataset = dataset.assign_coords(sample=tm_chip.name)
-    dataset = dataset.rio.write_crs(f'EPSG:{tm_chip.epsg}')
-    shape = (1, 1, tm_chip.ncol, tm_chip.nrow)
-    dataset['bands'] = xr.DataArray(chip_array.reshape(*shape), coords=coords, dims=['time', 'band', 'y', 'x'])
-    dataset['center_lat'] = xr.DataArray(tm_chip.center[1])
-    dataset['center_lon'] = xr.DataArray(tm_chip.center[0])
-    dataset['crs'] = xr.DataArray(tm_chip.epsg)
-    utils.check_spec(dataset)
-    return dataset
-
-
 def chip_labels(label_path: Path, date: datetime, output_dir: Path) -> list[Path]:
     label_dir = output_dir / 'LABEL'
     label_dir.mkdir(parents=True, exist_ok=True)
@@ -52,7 +35,7 @@ def chip_labels(label_path: Path, date: datetime, output_dir: Path) -> list[Path
     for tm_chip in tqdm(tm_grid.terra_mind_chips):
         chip = label.rio.reproject(
             dst_crs=f'EPSG:{tm_chip.epsg}',
-            resampling=rio.enums.Resampling(1),
+            resampling=rio.enums.Resampling(1),  # type: ignore
             transform=tm_chip.rio_transform,
             shape=(tm_chip.nrow, tm_chip.ncol),
         )
@@ -60,7 +43,7 @@ def chip_labels(label_path: Path, date: datetime, output_dir: Path) -> list[Path
         chip_array[np.isnan(chip_array)] = 0
         chip_array = np.round(chip_array).astype(np.int16)
         if is_valuable(chip_array):
-            dataset = create_dataset_chip(chip_array, tm_chip, ['label'], date)
+            dataset = create_dataset_chip(chip_array.reshape(1, *chip_array.shape), tm_chip, date, ['LABEL'])
             output_path = label_dir / f'{label_path.stem}_{tm_chip.name}.zarr.zip'
             utils.save_chip(dataset, output_path)
             output_paths.append(output_path)

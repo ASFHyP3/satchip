@@ -37,23 +37,9 @@ def get_epsg4326_bbox(
     return bbox
 
 
-def check_spec(dataset: xr.Dataset) -> None:
-    assert isinstance(dataset, xr.Dataset)
-    dims = ['band', 'time', 'x', 'y']
-    assert sorted(list(dataset.dims)) == dims
-    coords = ['band', 'sample', 'spatial_ref', 'time', 'x', 'y']
-    assert sorted(list(dataset.coords)) == coords
-    assert dataset.sample.ndim == 0
-    data_vars = ['bands', 'center_lat', 'center_lon', 'crs']
-    assert sorted(list(dataset.data_vars)) == data_vars
-    assert 'date_created' in list(dataset.attrs.keys())
-    assert 'satchip_version' in list(dataset.attrs.keys())
-    assert 'bounds' in list(dataset.attrs.keys())
-
-
 def save_chip(dataset: xr.Dataset, save_path: str | Path) -> None:
     """Save a zipped zarr archive"""
-    store = zarr.storage.ZipStore(save_path, mode='w')
+    store = zarr.storage.ZipStore(save_path, mode='w')  # type: ignore
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', message='Duplicate name:', module='zipfile')
         dataset.to_zarr(store)
