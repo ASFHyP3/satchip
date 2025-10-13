@@ -42,12 +42,13 @@ def create_dataset_chip(chip_array: np.ndarray, tm_chip: TerraMindChip, bands: l
     return dataset
 
 
-def chip_labels(label_path: Path, date: datetime, output_dir: Path) -> Path:
+def chip_labels(label_path: Path, date: datetime, output_dir: Path) -> list[Path]:
     label_dir = output_dir / 'LABEL'
     label_dir.mkdir(parents=True, exist_ok=True)
     label = xr.open_dataarray(label_path)
     bbox = utils.get_epsg4326_bbox(label.rio.bounds(), label.rio.crs.to_epsg())
     tm_grid = TerraMindGrid(latitude_range=(bbox[1], bbox[3]), longitude_range=(bbox[0], bbox[2]))
+    output_paths = []
     for tm_chip in tqdm(tm_grid.terra_mind_chips):
         chip = label.rio.reproject(
             dst_crs=f'EPSG:{tm_chip.epsg}',
@@ -62,6 +63,8 @@ def chip_labels(label_path: Path, date: datetime, output_dir: Path) -> Path:
             dataset = create_dataset_chip(chip_array, tm_chip, ['label'], date)
             output_path = label_dir / f'{label_path.stem}_{tm_chip.name}.zarr.zip'
             utils.save_chip(dataset, output_path)
+            output_paths.append(output_path)
+    return output_paths
 
 
 def main() -> None:
