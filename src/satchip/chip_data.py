@@ -1,14 +1,12 @@
 import argparse
 from datetime import datetime
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
 import numpy as np
 import xarray as xr
 from shapely.geometry import box
 from tqdm import tqdm
 
-import satchip
 from satchip import utils
 from satchip.chip_hls import get_hls_data
 from satchip.chip_sentinel1rtc import get_rtc_paths_for_chips, get_s1rtc_chip_data

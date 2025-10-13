@@ -1,3 +1,4 @@
+from collections import OrderedDict
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -9,28 +10,32 @@ import xarray as xr
 from earthaccess.results import DataGranule
 
 from satchip import utils
-from satchip.chip_xr_base import create_template_da
+from satchip.chip_xr_base import create_dataset_chip, create_template_da
 from satchip.terra_mind_grid import TerraMindChip
 
 
-HLS_L_BANDS = {
-    'B01': 'COASTAL',
-    'B02': 'BLUE',
-    'B03': 'GREEN',
-    'B04': 'RED',
-    'B05': 'NIR08',
-    'B06': 'SWIR16',
-    'B07': 'SWIR22',
-}
-HLS_S_BANDS = {
-    'B01': 'COASTAL',
-    'B02': 'BLUE',
-    'B03': 'GREEN',
-    'B04': 'RED',
-    'B8A': 'NIR08',
-    'B11': 'SWIR16',
-    'B12': 'SWIR22',
-}
+HLS_L_BANDS = OrderedDict(
+    {
+        'B01': 'COASTAL',
+        'B02': 'BLUE',
+        'B03': 'GREEN',
+        'B04': 'RED',
+        'B05': 'NIR08',
+        'B06': 'SWIR16',
+        'B07': 'SWIR22',
+    }
+)
+HLS_S_BANDS = OrderedDict(
+    {
+        'B01': 'COASTAL',
+        'B02': 'BLUE',
+        'B03': 'GREEN',
+        'B04': 'RED',
+        'B8A': 'NIR08',
+        'B11': 'SWIR16',
+        'B12': 'SWIR22',
+    }
+)
 BAND_SETS = {'L30': HLS_L_BANDS, 'S30': HLS_S_BANDS}
 
 
@@ -94,7 +99,7 @@ def get_scenes(
     return valid_scenes
 
 
-def get_hls_data(chip: TerraMindChip, scratch_dir: Path, opts: utils.ChipDataOpts) -> xr.DataArray:
+def get_hls_data(chip: TerraMindChip, scratch_dir: Path, opts: utils.ChipDataOpts) -> xr.Dataset:
     """Returns XArray DataArray of a Harmonized Landsat Sentinel-2 image for the given bounds and
     closest collection after date.
     """
@@ -109,24 +114,32 @@ def get_hls_data(chip: TerraMindChip, scratch_dir: Path, opts: utils.ChipDataOpt
     roi_buffered = roi.buffer(0.01)
     max_cloud_pct = opts.get('max_cloud_pct', 100)
     strategy = opts.get('strategy', 'BEST').upper()
-    scenes = get_scenes(results, roi, max_cloud_pct, strategy, scratch_dir)
-    das = []
+    timesteps = get_scenes(results, roi, max_cloud_pct, strategy, scratch_dir)
     template = create_template_da(chip)
-    for scene in scenes:
+    timestep_arrays = []
+    for scene in timesteps:
         product_id = get_product_id(scene['umm'])
         bands = BAND_SETS[product_id.split('.')[1]]
+        band_arrays = []
         for band in bands:
             image_path = scratch_dir / f'{product_id}.v2.0.{band}.tif'
             da = rioxarray.open_rasterio(image_path).rio.clip_box(*roi_buffered.bounds, crs='EPSG:4326')  # type: ignore
             da_reproj = da.rio.reproject_match(template)
-            da_reproj['band'] = [bands[band]]
-            da_reproj = da_reproj.expand_dims({'time': [get_date(scene['umm']).replace(tzinfo=None)]})
-            da_reproj['x'] = np.arange(0, chip.ncol)
-            da_reproj['y'] = np.arange(0, chip.nrow)
-            da_reproj.attrs = {}
-            das.append(da_reproj)
-    dataarray = xr.combine_by_coords(das, join='override').drop_vars('spatial_ref')
-    assert isinstance(dataarray, xr.DataArray)
-    dataarray = dataarray.expand_dims({'sample': [chip.name], 'platform': ['HLS']})
-    dataarray.attrs = {}
-    return dataarray
+            band_arrays.append(da_reproj.data.squeeze())
+        band_array = np.stack(band_arrays, axis=0)
+        timestep_arrays.append(band_array)
+    data_array = np.stack(timestep_arrays, axis=0)
+    dates = [get_date(scene['umm']).replace(tzinfo=None) for scene in timesteps]  # type: ignore
+    dataset = create_dataset_chip(data_array, chip, dates, list(HLS_L_BANDS.values()))
+    return dataset
+    #         da_reproj['band'] = [bands[band]]
+    #         da_reproj = da_reproj.expand_dims({'time': [get_date(scene['umm']).replace(tzinfo=None)]})
+    #         da_reproj['x'] = np.arange(0, chip.ncol)
+    #         da_reproj['y'] = np.arange(0, chip.nrow)
+    #         da_reproj.attrs = {}
+    #         das.append(da_reproj)
+    # dataarray = xr.combine_by_coords(das, join='override').drop_vars('spatial_ref')
+    # assert isinstance(dataarray, xr.DataArray)
+    # dataarray = dataarray.expand_dims({'sample': [chip.name], 'platform': ['HLS']})
+    # dataarray.attrs = {}
+    # return dataarray
