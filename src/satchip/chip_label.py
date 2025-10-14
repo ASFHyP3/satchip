@@ -12,14 +12,6 @@ from satchip.chip_xr_base import create_dataset_chip
 from satchip.terra_mind_grid import TerraMindGrid
 
 
-def get_overall_bounds(bounds: list) -> list:
-    minx = min([b[0] for b in bounds])
-    miny = min([b[1] for b in bounds])
-    maxx = max([b[2] for b in bounds])
-    maxy = max([b[3] for b in bounds])
-    return [minx, miny, maxx, maxy]
-
-
 def is_valuable(chip: np.ndarray) -> bool:
     vals = list(np.unique(chip))
     return not vals == [0]

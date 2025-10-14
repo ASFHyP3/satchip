@@ -16,6 +16,15 @@ class ChipDataRequiredOpts(TypedDict):
 
 class ChipDataOpts(ChipDataRequiredOpts, total=False):
     max_cloud_pct: int
+    local_hyp3_paths: dict[str, list[Path]]
+
+
+def get_overall_bounds(bounds: list) -> list:
+    minx = min([b[0] for b in bounds])
+    miny = min([b[1] for b in bounds])
+    maxx = max([b[2] for b in bounds])
+    maxy = max([b[3] for b in bounds])
+    return [minx, miny, maxx, maxy]
 
 
 def get_epsg4326_point(x: float, y: float, in_epsg: int) -> tuple[float, float]:
@@ -48,6 +57,6 @@ def save_chip(dataset: xr.Dataset, save_path: str | Path) -> None:
 
 def load_chip(label_path: str | Path) -> xr.Dataset:
     """Load a zipped zarr archive"""
-    store = zarr.storage.ZipStore(label_path, read_only=True)
+    store = zarr.storage.ZipStore(label_path, read_only=True)  # type: ignore
     dataset = xr.open_zarr(store)
     return dataset

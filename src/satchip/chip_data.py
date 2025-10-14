@@ -11,7 +11,7 @@ from satchip import utils
 from satchip.chip_hls import get_hls_data
 from satchip.chip_sentinel1rtc import get_rtc_paths_for_chips, get_s1rtc_chip_data
 from satchip.chip_sentinel2 import get_s2l2a_data
-from satchip.terra_mind_grid import TerraMindGrid
+from satchip.terra_mind_grid import TerraMindChip, TerraMindGrid
 
 
 def fill_missing_times(data_chip: xr.DataArray, times: np.ndarray) -> xr.DataArray:
@@ -30,32 +30,25 @@ def fill_missing_times(data_chip: xr.DataArray, times: np.ndarray) -> xr.DataArr
     return xr.concat([data_chip, missing_data], dim='time').sortby('time')
 
 
-def chip_data(
-    label_dataset: xr.Dataset,
-    platform: str,
-    date_start: datetime,
-    date_end: datetime,
-    strategy: str,
-    max_cloud_pct: int,
-    scratch_dir: Path,
-) -> xr.Dataset:
+def get_chip(label_path: Path) -> TerraMindChip:
+    label_dataset = utils.load_chip(label_path)
     bounds = label_dataset.attrs['bounds']
     buffered = box(*bounds).buffer(0.1).bounds
     grid = TerraMindGrid([buffered[1], buffered[3]], [buffered[0], buffered[2]])  # type: ignore
     chip = [c for c in grid.terra_mind_chips if c.name == str(label_dataset.sample.data)]
     assert len(chip) == 1, f'No TerraMind chip found for label {label_dataset.sample.data}'
-    chip = chip[0]
+    return chip[0]
 
-    opts: utils.ChipDataOpts = {'strategy': strategy, 'date_start': date_start, 'date_end': date_end}
-    if platform in ['S2L2A', 'HLS']:
-        opts['max_cloud_pct'] = max_cloud_pct
 
+def chip_data(
+    chip: TerraMindChip,
+    platform: str,
+    opts: utils.ChipDataOpts,
+    scratch_dir: Path,
+) -> xr.Dataset:
     if platform == 'S1RTC':
-        rtc_paths_for_chips = get_rtc_paths_for_chips(chip, bounds, scratch_dir, opts)
-
-    if platform == 'S1RTC':
-        rtc_paths = rtc_paths_for_chips[chip.name]
-        chip_dataset = get_s1rtc_chip_data(chip, rtc_paths, scratch_dir, opts=opts)
+        rtc_paths = opts['local_hyp3_paths'][chip.name]
+        chip_dataset = get_s1rtc_chip_data(chip, rtc_paths)
     elif platform == 'S2L2A':
         chip_dataset = get_s2l2a_data(chip, scratch_dir, opts=opts)
     elif platform == 'HLS':
@@ -78,10 +71,20 @@ def create_chips(
 ) -> list[Path]:
     platform_dir = output_dir / platform
     platform_dir.mkdir(parents=True, exist_ok=True)
+
+    opts: utils.ChipDataOpts = {'strategy': strategy, 'date_start': date_start, 'date_end': date_end}
+    if platform in ['S2L2A', 'HLS']:
+        opts['max_cloud_pct'] = max_cloud_pct
+
+    if platform == 'S1RTC':
+        chips = [get_chip(p) for p in label_paths]
+        rtc_paths_for_chips = get_rtc_paths_for_chips(chips, scratch_dir, opts)
+        opts['local_hyp3_paths'] = rtc_paths_for_chips
+
     output_paths = []
     for label_path in tqdm(label_paths, desc='Chipping labels'):
-        labels = utils.load_chip(label_path)
-        dataset = chip_data(labels, platform, date_start, date_end, strategy, max_cloud_pct, scratch_dir)
+        chip = get_chip(label_path)
+        dataset = chip_data(chip, platform, opts, scratch_dir)
         output_path = platform_dir / (label_path.with_suffix('').with_suffix('').name + f'_{platform}.zarr.zip')
         utils.save_chip(dataset, output_path)
         output_paths.append(output_path)

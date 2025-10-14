@@ -9,19 +9,23 @@ import shapely
 import xarray as xr
 
 from satchip import utils
-from satchip.chip_xr_base import create_template_da
+from satchip.chip_xr_base import create_dataset_chip, create_template_da
 from satchip.terra_mind_grid import TerraMindChip
 
 
+S1RTC_BANDS = ['VV', 'VH']
+
+
 def get_rtc_paths_for_chips(
-    terra_mind_chips: list[TerraMindChip], bounds: list[float], scratch_dir: Path, opts: utils.ChipDataOpts
+    terra_mind_chips: list[TerraMindChip], image_dir: Path, opts: utils.ChipDataOpts
 ) -> dict[str, list[Path]]:
+    bounds = utils.get_overall_bounds([chip.bounds for chip in terra_mind_chips])
     _check_bounds_size(bounds)
     granules = _get_granules(bounds, opts['date_start'], opts['date_end'])
     slcs_for_chips = _get_slcs_for_each_chip(terra_mind_chips, granules, opts['strategy'])
     assert len(slcs_for_chips) == len(terra_mind_chips)
 
-    rtc_paths_for_chips = _get_rtcs_for(slcs_for_chips, scratch_dir)
+    rtc_paths_for_chips = _get_rtcs_for(slcs_for_chips, image_dir)
     return rtc_paths_for_chips
 
 
@@ -37,7 +41,7 @@ def _check_bounds_size(bounds: list[float]) -> None:
 def _get_granules(bounds: list[float], date_start: datetime, date_end: datetime) -> list[asf.S1Product]:
     date_start = date_start
     date_end = date_end + timedelta(days=1)  # inclusive end
-    roi = shapely.box(*bounds)
+    roi = shapely.box(*bounds)  # type: ignore
     search_results = asf.geo_search(
         intersectsWith=roi.wkt,
         start=date_start,
@@ -136,7 +140,7 @@ def _is_valid_rtc_job(job: hyp3_sdk.Job) -> bool:
     return (
         not job.failed()
         and not job.expired()
-        and job.job_parameters['radiometry'] == 'gamma0'
+        and job.job_parameters['radiometry'] == 'gamma0' 
         and job.job_parameters['resolution'] == 20
     )
 
@@ -153,24 +157,20 @@ def _download_hyp3_rtc(job: hyp3_sdk.Job, scratch_dir: Path) -> tuple[Path, Path
     return vv_path, vh_path
 
 
-def get_s1rtc_chip_data(
-    chip: TerraMindChip, image_sets: list[Path], scratch_dir: Path, opts: utils.ChipDataOpts
-) -> xr.DataArray:
+def get_s1rtc_chip_data(chip: TerraMindChip, image_sets: list[tuple[Path]]) -> xr.Dataset:
     roi = shapely.box(*chip.bounds)
-    das = []
     template = create_template_da(chip)
+    timestep_arrays = []
     for image_set in image_sets:
-        for band_name, image_path in zip(['VV', 'VH'], image_set):
+        band_arrays = []
+        image_set = sorted(image_set)
+        for image_path in image_set:
             da = rioxarray.open_rasterio(image_path).rio.clip_box(*roi.buffer(0.1).bounds, crs='EPSG:4326')  # type: ignore
             da_reproj = da.rio.reproject_match(template)
-            da_reproj['band'] = [band_name]
-            image_time = datetime.strptime(image_path.name.split('_')[2], '%Y%m%dT%H%M%S')
-            da_reproj = da_reproj.expand_dims({'time': [image_time]})
-            da_reproj['x'] = np.arange(0, chip.ncol)
-            da_reproj['y'] = np.arange(0, chip.nrow)
-            da_reproj.attrs = {}
-            das.append(da_reproj)
-    dataarray = xr.combine_by_coords(das, join='override').drop_vars('spatial_ref')
-    assert isinstance(dataarray, xr.DataArray)
-    dataarray = dataarray.expand_dims({'sample': [chip.name], 'platform': ['S1RTC']})
-    return dataarray
+            band_arrays.append(da_reproj.data.squeeze())
+        band_array = np.stack(band_arrays, axis=0)
+        timestep_arrays.append(band_array)
+    data_array = np.stack(timestep_arrays, axis=0)
+    dates = [datetime.strptime(image_set[0].name.split('_')[2], '%Y%m%dT%H%M%S') for image_set in image_sets]
+    dataset = create_dataset_chip(data_array, chip, dates, S1RTC_BANDS)
+    return dataset
