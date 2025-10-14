@@ -140,7 +140,7 @@ def _is_valid_rtc_job(job: hyp3_sdk.Job) -> bool:
     return (
         not job.failed()
         and not job.expired()
-        and job.job_parameters['radiometry'] == 'gamma0' 
+        and job.job_parameters['radiometry'] == 'gamma0'
         and job.job_parameters['resolution'] == 20
     )
 
