@@ -163,7 +163,8 @@ def get_s1rtc_chip_data(chip: TerraMindChip, image_sets: list[tuple[Path]]) -> x
     timestep_arrays = []
     for image_set in image_sets:
         band_arrays = []
-        image_set = sorted(image_set)
+        # Make sure order is always VV, VH
+        image_set = [[x for x in image_set if 'VV' in x.name][0], [x for x in image_set if 'VH' in x.name][0]]
         for image_path in image_set:
             da = rioxarray.open_rasterio(image_path).rio.clip_box(*roi.buffer(0.1).bounds, crs='EPSG:4326')  # type: ignore
             da_reproj = da.rio.reproject_match(template)
