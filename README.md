@@ -65,9 +65,9 @@ For instance, the bottom-left subgrid of MajorTOM tile `434U_876L` is named `434
 ## Viewing Chips
 Assessing chips after their creation can be challenging due to the large number of small images created. To address this issue, SatChip includes a `chipview` CLI tool that uses Matplotlib to quickly visualize the data included within the created zipped Zarr stores:
 ```bash
-chipview PATH/TO/CHIP.zarr.zip BAND --idx IDX
+chipview PATH/TO/CHIP.zarr.zip --band BAND
 ```
-Where `PATH/TO/CHIPS.zarr.zip` is the path to the chip file (labels or image data), `BAND` is the name of the band you would like to view, and `IDX` is an optional integer index of which dataset you would like to initially view.
+Where `PATH/TO/CHIPS.zarr.zip` is the path to the chip file (labels or image data), and `BAND` is an OPTIONAL name of the band you would like to view. If no band is specified, an OPERA-style RGB decomposition will be shown for RTC data, and an RGB composite will be shown for optical data.
 
 ## License
 `SatChip` is licensed under the BSD-3-Clause open source license. See the LICENSE file for more details.
