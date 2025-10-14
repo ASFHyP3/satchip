@@ -49,28 +49,28 @@ def url_to_s3path(url: str) -> str:
     return f'{bucket}/{key}'
 
 
-def url_to_localpath(url: str, scratch_dir: Path) -> Path:
-    """Converts an S3 URL to a local file path in the given scratch directory."""
+def url_to_localpath(url: str, image_dir: Path) -> Path:
+    """Converts an S3 URL to a local file path in the given image directory."""
     parsed = urlparse(url)
     name = '_'.join(parsed.path.lstrip('/').split('/')[-2:])
-    local_file_path = scratch_dir / name
+    local_file_path = image_dir / name
     return local_file_path
 
 
-def fetch_s3_file(url: str, scratch_dir: Path) -> Path:
-    """Fetches an S3 file to the given scratch directory if it doesn't already exist."""
-    local_path = url_to_localpath(url, scratch_dir)
+def fetch_s3_file(url: str, image_dir: Path) -> Path:
+    """Fetches an S3 file to the given image directory if it doesn't already exist."""
+    local_path = url_to_localpath(url, image_dir)
     if not local_path.exists():
         s3_path = url_to_s3path(url)
         S3_FS.get(s3_path, str(local_path))
     return local_path
 
 
-def multithread_fetch_s3_file(urls: list[str], scratch_dir: Path, max_workers: int = 8) -> None:
-    """Fetches multiple S3 files to the given scratch directory using multithreading."""
+def multithread_fetch_s3_file(urls: list[str], image_dir: Path, max_workers: int = 8) -> None:
+    """Fetches multiple S3 files to the given image directory using multithreading."""
     s3_paths, download_paths = [], []
     for url in urls:
-        local_path = url_to_localpath(url, scratch_dir)
+        local_path = url_to_localpath(url, image_dir)
         if not local_path.exists():
             download_paths.append(local_path)
             s3_paths.append(url_to_s3path(url))
@@ -89,7 +89,7 @@ def get_pct_intersect(scene_geom: dict | None, roi: shapely.geometry.Polygon) ->
 
 
 def get_scenes(
-    items: list[Item], roi: shapely.geometry.Polygon, strategy: str, max_cloud_pct: int, scratch_dir: Path
+    items: list[Item], roi: shapely.geometry.Polygon, strategy: str, max_cloud_pct: int, image_dir: Path
 ) -> list[Item]:
     """Returns the best Sentinel-2 L2A scene from the given list of items.
     The best scene is defined as the earliest scene with the largest intersection with the roi and
@@ -99,7 +99,7 @@ def get_scenes(
         items: List of Sentinel-2 L2A items.
         roi: Region of interest polygon.
         max_cloud_pct: Maximum percent of bad pixels allowed in the scene.
-        scratch_dir: Directory to store downloaded files.
+        image_dir: Directory to store downloaded files.
 
     Returns:
         The best Sentinel-2 L2A item.
@@ -112,7 +112,7 @@ def get_scenes(
     valid_scenes = []
     for item in best_first:
         scl_href = item.assets['scl'].href
-        local_path = fetch_s3_file(scl_href, scratch_dir)
+        local_path = fetch_s3_file(scl_href, image_dir)
         assert local_path.exists(), f'File not found: {local_path}'
         scl_da = rioxarray.open_rasterio(local_path).rio.clip_box(*roi.bounds, crs='EPSG:4326')  # type: ignore
         scl_array = scl_da.data[0]
@@ -131,12 +131,12 @@ def get_scenes(
     return valid_scenes
 
 
-def get_s2l2a_data(chip: TerraMindChip, scratch_dir: Path, opts: utils.ChipDataOpts) -> xr.Dataset:
+def get_s2l2a_data(chip: TerraMindChip, image_dir: Path, opts: utils.ChipDataOpts) -> xr.Dataset:
     """Get XArray DataArray of Sentinel-2 L2A image for the given bounds and best collection parameters.
 
     Args:
         chip: TerraMindChip object defining the area of interest.
-        scratch_dir: Directory to store downloaded files.
+        image_dir: Directory to store downloaded files.
         opts: Options dictionary with the following keys
             - date_start: Start date for the search.
             - date_end: End date for the search.
@@ -167,15 +167,15 @@ def get_s2l2a_data(chip: TerraMindChip, scratch_dir: Path, opts: utils.ChipDataO
     items = list(search.item_collection())
     max_cloud_pct = opts.get('max_cloud_pct', 100)
     strategy = opts.get('strategy', 'BEST')
-    timesteps = get_scenes(items, roi, strategy, max_cloud_pct, scratch_dir)
+    timesteps = get_scenes(items, roi, strategy, max_cloud_pct, image_dir)
     urls = [item.assets[S2_BANDS[band].lower()].href for item in items for band in S2_BANDS]
-    multithread_fetch_s3_file(urls, scratch_dir)
+    multithread_fetch_s3_file(urls, image_dir)
     template = create_template_da(chip)
     timestep_arrays = []
     for item in timesteps:
         band_arrays = []
         for band in S2_BANDS:
-            local_path = url_to_localpath(item.assets[S2_BANDS[band].lower()].href, scratch_dir)
+            local_path = url_to_localpath(item.assets[S2_BANDS[band].lower()].href, image_dir)
             assert local_path.exists(), f'File not found: {local_path}'
             da = rioxarray.open_rasterio(local_path).rio.clip_box(*roi_buffered.bounds, crs='EPSG:4326')  # type: ignore
             da_reproj = da.rio.reproject_match(template)

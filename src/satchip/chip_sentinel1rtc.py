@@ -82,7 +82,7 @@ def _get_pct_intersect(product: asf.S1Product, roi: shapely.geometry.Polygon) ->
     return intersection
 
 
-def _get_rtcs_for(slcs_for_chips: dict[str, list[asf.S1Product]], scratch_dir: Path) -> dict[str, list[Path]]:
+def _get_rtcs_for(slcs_for_chips: dict[str, list[asf.S1Product]], image_dir: Path) -> dict[str, list[Path]]:
     flat_slcs = sum(slcs_for_chips.values(), [])
     slc_names = set(granule.properties['sceneName'] for granule in flat_slcs)
 
@@ -90,7 +90,7 @@ def _get_rtcs_for(slcs_for_chips: dict[str, list[asf.S1Product]], scratch_dir: P
 
     paths_for_slc_name: dict[str, Path] = {}
     for job in finished_rtc_jobs:
-        rtc_path = _download_hyp3_rtc(job, scratch_dir)
+        rtc_path = _download_hyp3_rtc(job, image_dir)
         slc_name = job.job_parameters['granules'][0]
 
         paths_for_slc_name[slc_name] = rtc_path
@@ -145,12 +145,12 @@ def _is_valid_rtc_job(job: hyp3_sdk.Job) -> bool:
     )
 
 
-def _download_hyp3_rtc(job: hyp3_sdk.Job, scratch_dir: Path) -> tuple[Path, Path]:
-    output_path = scratch_dir / job.to_dict()['files'][0]['filename']
+def _download_hyp3_rtc(job: hyp3_sdk.Job, image_dir: Path) -> tuple[Path, Path]:
+    output_path = image_dir / job.to_dict()['files'][0]['filename']
     output_dir = output_path.with_suffix('')
     output_zip = output_path.with_suffix('.zip')
     if not output_dir.exists():
-        job.download_files(location=scratch_dir)
+        job.download_files(location=image_dir)
         hyp3_sdk.util.extract_zipped_product(output_zip)
     vv_path = list(output_dir.glob('*_VV.tif'))[0]
     vh_path = list(output_dir.glob('*_VH.tif'))[0]

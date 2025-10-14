@@ -44,15 +44,15 @@ def chip_data(
     chip: TerraMindChip,
     platform: str,
     opts: utils.ChipDataOpts,
-    scratch_dir: Path,
+    image_dir: Path,
 ) -> xr.Dataset:
     if platform == 'S1RTC':
         rtc_paths = opts['local_hyp3_paths'][chip.name]
         chip_dataset = get_s1rtc_chip_data(chip, rtc_paths)
     elif platform == 'S2L2A':
-        chip_dataset = get_s2l2a_data(chip, scratch_dir, opts=opts)
+        chip_dataset = get_s2l2a_data(chip, image_dir, opts=opts)
     elif platform == 'HLS':
-        chip_dataset = get_hls_data(chip, scratch_dir, opts=opts)
+        chip_dataset = get_hls_data(chip, image_dir, opts=opts)
     else:
         raise Exception(f'Unknown platform {platform}')
 
@@ -67,7 +67,7 @@ def create_chips(
     strategy: str,
     max_cloud_pct: int,
     output_dir: Path,
-    scratch_dir: Path,
+    image_dir: Path,
 ) -> list[Path]:
     platform_dir = output_dir / platform
     platform_dir.mkdir(parents=True, exist_ok=True)
@@ -78,13 +78,13 @@ def create_chips(
 
     if platform == 'S1RTC':
         chips = [get_chip(p) for p in label_paths]
-        rtc_paths_for_chips = get_rtc_paths_for_chips(chips, scratch_dir, opts)
+        rtc_paths_for_chips = get_rtc_paths_for_chips(chips, image_dir, opts)
         opts['local_hyp3_paths'] = rtc_paths_for_chips
 
     output_paths = []
     for label_path in tqdm(label_paths, desc='Chipping labels'):
         chip = get_chip(label_path)
-        dataset = chip_data(chip, platform, opts, scratch_dir)
+        dataset = chip_data(chip, platform, opts, image_dir)
         output_path = platform_dir / (label_path.with_suffix('').with_suffix('').name + f'_{platform}.zarr.zip')
         utils.save_chip(dataset, output_path)
         output_paths.append(output_path)

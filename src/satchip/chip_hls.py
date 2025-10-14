@@ -57,7 +57,7 @@ def get_product_id(umm: dict) -> str:
 
 
 def get_scenes(
-    items: list[DataGranule], roi: shapely.geometry.Polygon, max_cloud_pct: int, strategy: str, scratch_dir: Path
+    items: list[DataGranule], roi: shapely.geometry.Polygon, max_cloud_pct: int, strategy: str, image_dir: Path
 ) -> list[DataGranule]:
     """Returns the best HLS scene from the given list of items.
     The best scene is defined as the earliest scene with the largest intersection with the roi and
@@ -68,7 +68,7 @@ def get_scenes(
         roi: Region of interest polygon.
         max_cloud_pct: Maximum percent of bad pixels allowed in the scene.
         strategy: Strategy to use when selecting data.
-        scratch_dir: Directory to store downloaded files.
+        image_dir: Directory to store downloaded files.
 
     Returns:
         The best HLS items.
@@ -79,10 +79,10 @@ def get_scenes(
     valid_scenes = []
     for item in best_first:
         product_id = get_product_id(item['umm'])
-        n_products = len(list(scratch_dir.glob(f'{product_id}*')))
+        n_products = len(list(image_dir.glob(f'{product_id}*')))
         if n_products < 15:
-            earthaccess.download([item], scratch_dir, pqdm_kwargs={'disable': True})
-        fmask_path = scratch_dir / f'{product_id}.v2.0.Fmask.tif'
+            earthaccess.download([item], image_dir, pqdm_kwargs={'disable': True})
+        fmask_path = image_dir / f'{product_id}.v2.0.Fmask.tif'
         assert fmask_path.exists(), f'File not found: {fmask_path}'
         qual_da = rioxarray.open_rasterio(fmask_path).rio.clip_box(*roi.bounds, crs='EPSG:4326')  # type: ignore
         bit_masks = np.unpackbits(qual_da.data[0][..., np.newaxis], axis=-1)
@@ -99,7 +99,7 @@ def get_scenes(
     return valid_scenes
 
 
-def get_hls_data(chip: TerraMindChip, scratch_dir: Path, opts: utils.ChipDataOpts) -> xr.Dataset:
+def get_hls_data(chip: TerraMindChip, image_dir: Path, opts: utils.ChipDataOpts) -> xr.Dataset:
     """Returns XArray DataArray of a Harmonized Landsat Sentinel-2 image for the given bounds and
     closest collection after date.
     """
@@ -114,7 +114,7 @@ def get_hls_data(chip: TerraMindChip, scratch_dir: Path, opts: utils.ChipDataOpt
     roi_buffered = roi.buffer(0.01)
     max_cloud_pct = opts.get('max_cloud_pct', 100)
     strategy = opts.get('strategy', 'BEST').upper()
-    timesteps = get_scenes(results, roi, max_cloud_pct, strategy, scratch_dir)
+    timesteps = get_scenes(results, roi, max_cloud_pct, strategy, image_dir)
     template = create_template_da(chip)
     timestep_arrays = []
     for scene in timesteps:
@@ -122,7 +122,7 @@ def get_hls_data(chip: TerraMindChip, scratch_dir: Path, opts: utils.ChipDataOpt
         bands = BAND_SETS[product_id.split('.')[1]]
         band_arrays = []
         for band in bands:
-            image_path = scratch_dir / f'{product_id}.v2.0.{band}.tif'
+            image_path = image_dir / f'{product_id}.v2.0.{band}.tif'
             da = rioxarray.open_rasterio(image_path).rio.clip_box(*roi_buffered.bounds, crs='EPSG:4326')  # type: ignore
             da_reproj = da.rio.reproject_match(template)
             band_arrays.append(da_reproj.data.squeeze())
@@ -132,14 +132,3 @@ def get_hls_data(chip: TerraMindChip, scratch_dir: Path, opts: utils.ChipDataOpt
     dates = [get_date(scene['umm']).replace(tzinfo=None) for scene in timesteps]  # type: ignore
     dataset = create_dataset_chip(data_array, chip, dates, list(HLS_L_BANDS.values()))
     return dataset
-    #         da_reproj['band'] = [bands[band]]
-    #         da_reproj = da_reproj.expand_dims({'time': [get_date(scene['umm']).replace(tzinfo=None)]})
-    #         da_reproj['x'] = np.arange(0, chip.ncol)
-    #         da_reproj['y'] = np.arange(0, chip.nrow)
-    #         da_reproj.attrs = {}
-    #         das.append(da_reproj)
-    # dataarray = xr.combine_by_coords(das, join='override').drop_vars('spatial_ref')
-    # assert isinstance(dataarray, xr.DataArray)
-    # dataarray = dataarray.expand_dims({'sample': [chip.name], 'platform': ['HLS']})
-    # dataarray.attrs = {}
-    # return dataarray
