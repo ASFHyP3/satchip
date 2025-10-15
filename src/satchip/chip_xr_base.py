@@ -7,7 +7,7 @@ import satchip
 from satchip.terra_mind_grid import TerraMindChip
 
 
-def check_spec(dataset: xr.Dataset) -> None:
+def _check_spec(dataset: xr.Dataset) -> None:
     assert isinstance(dataset, xr.Dataset)
     dims = ['band', 'time', 'x', 'y']
     assert sorted(list(dataset.dims)) == dims  # type: ignore
@@ -45,14 +45,14 @@ def create_dataset_chip(
     dataset['center_lat'] = xr.DataArray(tm_chip.center[1])
     dataset['center_lon'] = xr.DataArray(tm_chip.center[0])
     dataset['crs'] = xr.DataArray(tm_chip.epsg)
-    check_spec(dataset)
+    _check_spec(dataset)
     return dataset
 
 
 def create_template_da(chip: TerraMindChip) -> xr.DataArray:
     """Create a template DataArray with the same dimensions and transform as a label chip."""
-    x = np.arange(chip.nrow) * chip.gdal_transform[1] + chip.gdal_transform[0] + chip.gdal_transform[1] / 2
-    y = np.arange(chip.ncol) * chip.gdal_transform[5] + chip.gdal_transform[3] + chip.gdal_transform[5] / 2
+    x = chip.minx + (np.arange(chip.nrow) + 0.5) * chip.xres
+    y = chip.maxy + (np.arange(chip.ncol) + 0.5) * chip.yres
     template = xr.DataArray(np.zeros((chip.ncol, chip.nrow)), dims=('y', 'x'), coords={'y': y, 'x': x})
     template.rio.write_crs(f'EPSG:{chip.epsg}', inplace=True)
     template.rio.write_transform(chip.rio_transform, inplace=True)

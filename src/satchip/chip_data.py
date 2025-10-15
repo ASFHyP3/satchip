@@ -32,8 +32,7 @@ def fill_missing_times(data_chip: xr.DataArray, times: np.ndarray) -> xr.DataArr
 
 def get_chip(label_path: Path) -> TerraMindChip:
     label_dataset = utils.load_chip(label_path)
-    bounds = label_dataset.attrs['bounds']
-    buffered = box(*bounds).buffer(0.1).bounds
+    buffered = box(*label_dataset.bounds).buffer(0.1).bounds
     grid = TerraMindGrid([buffered[1], buffered[3]], [buffered[0], buffered[2]])  # type: ignore
     chip = [c for c in grid.terra_mind_chips if c.name == str(label_dataset.sample.data)]
     assert len(chip) == 1, f'No TerraMind chip found for label {label_dataset.sample.data}'

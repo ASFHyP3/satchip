@@ -90,20 +90,15 @@ def _get_rtcs_for(
 
     finished_rtc_jobs = _process_rtcs(slc_names)
 
-    paths_for_slc_name: dict[str, tuple[Path, Path]] = {}
+    paths_for_slc_name: dict[str, utils.RtcImageSet] = {}
     for job in finished_rtc_jobs:
-        rtc_path = _download_hyp3_rtc(job, image_dir)
+        rtc_image_set = _download_hyp3_rtc(job, image_dir)
         slc_name = job.job_parameters['granules'][0]  # type: ignore
-
-        paths_for_slc_name[slc_name] = rtc_path
+        paths_for_slc_name[slc_name] = rtc_image_set
 
     rtc_paths_for_chips: dict[str, list[utils.RtcImageSet]] = {}
     for chip_name, chip_slcs in slcs_for_chips.items():
-        image_sets = []
-        for name in chip_slcs:
-            pol_paths = paths_for_slc_name[name.properties['sceneName']]
-            image_set = utils.RtcImageSet(vv=pol_paths[0], vh=pol_paths[1])
-            image_sets.append(image_set)
+        image_sets = [paths_for_slc_name[name.properties['sceneName']] for name in chip_slcs]
         rtc_paths_for_chips[chip_name] = image_sets
 
     return rtc_paths_for_chips
@@ -151,7 +146,7 @@ def _is_valid_rtc_job(job: hyp3_sdk.Job) -> bool:
     )
 
 
-def _download_hyp3_rtc(job: hyp3_sdk.Job, image_dir: Path) -> tuple[Path, Path]:
+def _download_hyp3_rtc(job: hyp3_sdk.Job, image_dir: Path) -> utils.RtcImageSet:
     output_path = image_dir / job.to_dict()['files'][0]['filename']
     output_dir = output_path.with_suffix('')
     output_zip = output_path.with_suffix('.zip')
@@ -160,7 +155,8 @@ def _download_hyp3_rtc(job: hyp3_sdk.Job, image_dir: Path) -> tuple[Path, Path]:
         hyp3_sdk.util.extract_zipped_product(output_zip)
     vv_path = list(output_dir.glob('*_VV.tif'))[0]
     vh_path = list(output_dir.glob('*_VH.tif'))[0]
-    return vv_path, vh_path
+    image_set = utils.RtcImageSet(vv=vv_path, vh=vh_path)
+    return image_set
 
 
 def get_s1rtc_chip_data(chip: TerraMindChip, image_sets: list[utils.RtcImageSet]) -> xr.Dataset:
