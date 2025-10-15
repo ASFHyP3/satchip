@@ -36,7 +36,7 @@ def get_chip(label_path: Path) -> TerraMindChip:
     grid = TerraMindGrid([buffered[1], buffered[3]], [buffered[0], buffered[2]])  # type: ignore
     label_chip_name = label_dataset.sample.item()
     chip = [c for c in grid.terra_mind_chips if c.name == label_chip_name]
-    assert len(chip) == 1, f'No TerraMind chip found for label {label_dataset.sample.data}'
+    assert len(chip) == 1, f'No TerraMind chip found for label {label_chip_name}'
     return chip[0]
 
 
