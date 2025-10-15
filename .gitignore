@@ -244,3 +244,4 @@ tags
 # Data
 *.zarr.zip
 *tif*
+integration_test/
