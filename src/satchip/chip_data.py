@@ -66,10 +66,10 @@ def create_chips(
     date_end: datetime,
     strategy: str,
     max_cloud_pct: int,
-    output_dir: Path,
+    chip_dir: Path,
     image_dir: Path,
 ) -> list[Path]:
-    platform_dir = output_dir / platform
+    platform_dir = chip_dir / platform
     platform_dir.mkdir(parents=True, exist_ok=True)
 
     opts: utils.ChipDataOpts = {'strategy': strategy, 'date_start': date_start, 'date_end': date_end}
@@ -81,14 +81,14 @@ def create_chips(
         rtc_paths_for_chips = get_rtc_paths_for_chips(chips, image_dir, opts)
         opts['local_hyp3_paths'] = rtc_paths_for_chips
 
-    output_paths = []
+    chip_paths = []
     for label_path in tqdm(label_paths, desc='Chipping labels'):
         chip = get_chip(label_path)
         dataset = chip_data(chip, platform, opts, image_dir)
-        output_path = platform_dir / (label_path.with_suffix('').with_suffix('').name + f'_{platform}.zarr.zip')
-        utils.save_chip(dataset, output_path)
-        output_paths.append(output_path)
-    return output_paths
+        chip_path = platform_dir / (label_path.with_suffix('').with_suffix('').name + f'_{platform}.zarr.zip')
+        utils.save_chip(dataset, chip_path)
+        chip_paths.append(chip_path)
+    return chip_paths
 
 
 def main() -> None:
@@ -97,9 +97,9 @@ def main() -> None:
     parser.add_argument('platform', choices=['S2L2A', 'S1RTC', 'HLS'], type=str, help='Dataset to create chips for')
     parser.add_argument('daterange', type=str, help='Inclusive date range to search for data in the format Ymd-Ymd')
     parser.add_argument('--maxcloudpct', default=100, type=int, help='Maximum percent cloud cover for a data chip')
-    parser.add_argument('--outdir', default='.', type=Path, help='Output directory for the chips')
+    parser.add_argument('--chipdir', default='.', type=Path, help='Output directory for the chips')
     parser.add_argument(
-        '--imagedir', default=None, type=Path, help='Output directory for image files. Defaults to outdir/IMAGES'
+        '--imagedir', default=None, type=Path, help='Output directory for image files. Defaults to chipdir/IMAGES'
     )
     parser.add_argument(
         '--strategy',
@@ -117,10 +117,10 @@ def main() -> None:
     assert len(label_paths) > 0, f'No label files found in {args.labelpath}'
 
     if args.imagedir is None:
-        args.imagedir = args.outdir / 'IMAGES'
+        args.imagedir = args.chipdir / 'IMAGES'
 
     create_chips(
-        label_paths, args.platform, date_start, date_end, args.strategy, args.maxcloudpct, args.outdir, args.imagedir
+        label_paths, args.platform, date_start, date_end, args.strategy, args.maxcloudpct, args.chipdir, args.imagedir
     )
 
 

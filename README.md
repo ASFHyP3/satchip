@@ -6,16 +6,16 @@ A package for satellite image AI data prep. This package "chips" data labels and
 `SatChip` relies on a two-step process; chip your label train data inputs, then create corresponding chips for different remote sensing data sources.
 
 ### Step 1: Chip labels
-The `chiplabel` CLI tool takes a GDAL-compatible image, a collection date, and an optional output directory as input using the following format:
+The `chiplabel` CLI tool takes a GDAL-compatible image, a collection date, and an optional chip directory as input using the following format:
 
 ```bash
-chiplabel PATH/TO/LABELS.tif DATE(UTC FORMAT) --outdir OUTPUT_DIR
+chiplabel PATH/TO/LABELS.tif DATE(UTC FORMAT) --chipdir CHIP_DIR
 ```
 For example:
 ```bash
-chiplabel LA_damage_20250113_v0.tif 2024-01-01T01:01:01 --outdir chips
+chiplabel LA_damage_20250113_v0.tif 2024-01-01T01:01:01 --chipdir chips
 ```
-This will produce an output zipped Zarr store label dataset with the name `{LABEL}_{SAMPLE}.zarr.zip` (see the (Tiling Schema)[#tiling_schema] section for details on the `SAMPLE` name) to the `LABEL` directory in the specified output directory (`--outdir`). This file will be the input to the remote sensing data chipping step.
+This will produce an output zipped Zarr store label dataset with the name `{LABEL}_{SAMPLE}.zarr.zip` (see the (Tiling Schema)[#tiling_schema] section for details on the `SAMPLE` name) to the `LABEL` directory in the specified chip directory (`--chipdir`). This file will be the input to the remote sensing data chipping step.
 
 For more information on usage see `chiplabel --help`
 
@@ -24,11 +24,11 @@ The `chipdata` CLI tool takes a path to a directory containing chip labels, a da
 ```bash
 chipdata PATH/TO/LABEL DATASET Ymd-Ymd \ 
     --maxcloudpct MAX_CLOUD_PCT --strategy STRATEGY \
-    --outdir OUTPUT_DIR --imagedir IMAGE_DIR
+    --chipdir CHIPPUT_DIR --imagedir IMAGE_DIR
 ```
 For example:
 ```bash
-chipdata LABEL S2L2A 20250112-20250212 --maxcloudpct 20 --outdir OUTPUT_DIR --imagedir IMAGES
+chipdata LABEL S2L2A 20250112-20250212 --maxcloudpct 20 --chipdir CHIP_DIR --imagedir IMAGES
 ```
 Similarly to step 1, this will produce an output zipped Zarr store that contains chipped data for your chosen dataset with the name `{LABELS_{SAMPLE}_{DATASET}.zarr.zip`. The arguments are as follows:
 - `PATH/TO/LABEL`: the path to your training labels
@@ -36,8 +36,8 @@ Similarly to step 1, this will produce an output zipped Zarr store that contains
 - `Ymd-Ymd`: The date range to select imagery from. For example, `20250112-20250212` selects imagery between January 12 and February 12, 2025.
 - `MAX_CLOUD_PCT`: For optical data, this optional parameter lets you set the maximum amount of cloud coverage allowed in a chip. Values between 0 and 100 are allowed. Cloud coverage is calculated on a per-chip basis. The default is 100 i.e., no limit.
 - `STRATEGY`: Lets you selected what data inside your date range will be used to create chips. Specifying `BEST` (the default) will create a chip for the image closest to the beginning of your date range that has at least 95% spatial coverage. Specifying `ALL` will create chips for all images within your date range that have at least 95% spatial coverage.
-- `OUTPUT_DIR`: Specifies the directory where the image chips will be saved. If not specified, this defaults to your current directory.
-- `IMAGE_DIR`: Specifies the directory where the full-size satellite images will be downloaded to. If this argument is not provided, the images will be stored in the `IMAGES` directory within `OUTPUT_DIR`.
+- `CHIP_DIR`: Specifies the directory where the image chips will be saved. If not specified, this defaults to your current directory.
+- `IMAGE_DIR`: Specifies the directory where the full-size satellite images will be downloaded to. If this argument is not provided, the images will be stored in the `IMAGES` directory within `CHIP_DIR`.
 
 Currently supported datasets include:
 - `S2L2A`: Sentinel-2 L2A data sourced from the [Sentinel-2 AWS Open Data Archive](https://registry.opendata.aws/sentinel-2/)
