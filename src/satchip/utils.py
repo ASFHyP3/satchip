@@ -9,7 +9,7 @@ import zarr
 from pyproj import CRS, Transformer
 
 
-RtcImageSet = namedtuple('RtcImageSet', ['vv', 'vh'])
+RtcImageSet = namedtuple('RtcImageSet', ['VV', 'VH'])
 
 
 class ChipDataRequiredOpts(TypedDict):

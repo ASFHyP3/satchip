@@ -166,7 +166,7 @@ def get_s1rtc_chip_data(chip: TerraMindChip, image_sets: list[utils.RtcImageSet]
     for image_set in image_sets:
         band_arrays = []
         for band in S1RTC_BANDS:
-            image_path = image_set._asdict()[band.lower()]
+            image_path = image_set._asdict()[band]
             da = rioxarray.open_rasterio(image_path).rio.clip_box(*roi.buffer(0.1).bounds, crs='EPSG:4326')  # type: ignore
             da_reproj = da.rio.reproject_match(template)
             band_arrays.append(da_reproj.data.squeeze())

@@ -76,16 +76,17 @@ def create_chips(
     if platform in ['S2L2A', 'HLS']:
         opts['max_cloud_pct'] = max_cloud_pct
 
+    chips = [get_chip(p) for p in label_paths]
+    chip_paths = [
+        platform_dir / (x.with_suffix('').with_suffix('').name + f'_{platform}.zarr.zip') for x in label_paths
+    ]
     if platform == 'S1RTC':
-        chips = [get_chip(p) for p in label_paths]
         rtc_paths_for_chips = get_rtc_paths_for_chips(chips, image_dir, opts)
         opts['local_hyp3_paths'] = rtc_paths_for_chips
 
     chip_paths = []
-    for label_path in tqdm(label_paths, desc='Chipping labels'):
-        chip = get_chip(label_path)
+    for chip, chip_path in tqdm(zip(chips, chip_paths), desc='Chipping labels'):
         dataset = chip_data(chip, platform, opts, image_dir)
-        chip_path = platform_dir / (label_path.with_suffix('').with_suffix('').name + f'_{platform}.zarr.zip')
         utils.save_chip(dataset, chip_path)
         chip_paths.append(chip_path)
     return chip_paths
