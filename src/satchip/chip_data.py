@@ -84,11 +84,9 @@ def create_chips(
         rtc_paths_for_chips = get_rtc_paths_for_chips(chips, image_dir, opts)
         opts['local_hyp3_paths'] = rtc_paths_for_chips
 
-    chip_paths = []
     for chip, chip_path in tqdm(zip(chips, chip_paths), desc='Chipping labels'):
         dataset = chip_data(chip, platform, opts, image_dir)
         utils.save_chip(dataset, chip_path)
-        chip_paths.append(chip_path)
     return chip_paths
 
 
