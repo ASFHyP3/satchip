@@ -52,7 +52,7 @@ def view_chip(label_path: Path, band: str | None) -> None:
     chip = load_chip(label_path)
     band_names = list(chip['band'].values)
     if band is not None:
-        if band is not None and band not in band_names:
+        if band not in band_names:
             raise ValueError(f'Band {band} not found in chip. Available bands: {", ".join(band_names)}')
         image_type = 'user'
     elif any(b in band_names for b in ['VV', 'VH']):
