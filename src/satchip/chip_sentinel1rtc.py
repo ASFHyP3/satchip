@@ -18,7 +18,7 @@ S1RTC_BANDS = ['VV', 'VH']
 
 def get_rtc_paths_for_chips(
     terra_mind_chips: list[TerraMindChip], image_dir: Path, opts: utils.ChipDataOpts
-) -> dict[str, list[Path]]:
+) -> dict[str, list[utils.RtcImageSet]]:
     bounds = utils.get_overall_bounds([chip.bounds for chip in terra_mind_chips])
     _check_bounds_size(bounds)
     granules = _get_granules(bounds, opts['date_start'], opts['date_end'])
@@ -82,23 +82,29 @@ def _get_pct_intersect(product: asf.S1Product, roi: shapely.geometry.Polygon) ->
     return intersection
 
 
-def _get_rtcs_for(slcs_for_chips: dict[str, list[asf.S1Product]], image_dir: Path) -> dict[str, list[Path]]:
+def _get_rtcs_for(
+    slcs_for_chips: dict[str, list[asf.S1Product]], image_dir: Path
+) -> dict[str, list[utils.RtcImageSet]]:
     flat_slcs = sum(slcs_for_chips.values(), [])
     slc_names = set(granule.properties['sceneName'] for granule in flat_slcs)
 
     finished_rtc_jobs = _process_rtcs(slc_names)
 
-    paths_for_slc_name: dict[str, Path] = {}
+    paths_for_slc_name: dict[str, tuple[Path, Path]] = {}
     for job in finished_rtc_jobs:
         rtc_path = _download_hyp3_rtc(job, image_dir)
-        slc_name = job.job_parameters['granules'][0]
+        slc_name = job.job_parameters['granules'][0]  # type: ignore
 
         paths_for_slc_name[slc_name] = rtc_path
 
-    rtc_paths_for_chips: dict[str, list[Path]] = {}
+    rtc_paths_for_chips: dict[str, list[utils.RtcImageSet]] = {}
     for chip_name, chip_slcs in slcs_for_chips.items():
-        rtc_paths = [paths_for_slc_name[name.properties['sceneName']] for name in chip_slcs]
-        rtc_paths_for_chips[chip_name] = rtc_paths
+        image_sets = []
+        for name in chip_slcs:
+            pol_paths = paths_for_slc_name[name.properties['sceneName']]
+            image_set = utils.RtcImageSet(vv=pol_paths[0], vh=pol_paths[1])
+            image_sets.append(image_set)
+        rtc_paths_for_chips[chip_name] = image_sets
 
     return rtc_paths_for_chips
 
@@ -118,9 +124,9 @@ def _process_rtcs(slc_names: set[str]) -> hyp3_sdk.Batch:
 
     batch = hyp3_sdk.Batch(hyp3_jobs)
     batch = hyp3.watch(batch)
-    assert all([j.succeeded() for j in batch]), 'One or more HyP3 jobs failed'
+    assert all([j.succeeded() for j in batch]), 'One or more HyP3 jobs failed'  # type: ignore
 
-    return batch
+    return batch  # type: ignore
 
 
 def _get_rtc_jobs_by_scene_name(hyp3: hyp3_sdk.HyP3) -> dict[str, hyp3_sdk.Job]:
@@ -130,7 +136,7 @@ def _get_rtc_jobs_by_scene_name(hyp3: hyp3_sdk.HyP3) -> dict[str, hyp3_sdk.Job]:
         if not _is_valid_rtc_job(job):
             continue
 
-        name = job.job_parameters['granules'][0]
+        name = job.job_parameters['granules'][0]  # type: ignore
         jobs_by_scene_name[name] = job
 
     return jobs_by_scene_name
@@ -140,8 +146,8 @@ def _is_valid_rtc_job(job: hyp3_sdk.Job) -> bool:
     return (
         not job.failed()
         and not job.expired()
-        and job.job_parameters['radiometry'] == 'gamma0'
-        and job.job_parameters['resolution'] == 20
+        and job.job_parameters['radiometry'] == 'gamma0'  # type: ignore
+        and job.job_parameters['resolution'] == 20  # type: ignore
     )
 
 
@@ -157,15 +163,14 @@ def _download_hyp3_rtc(job: hyp3_sdk.Job, image_dir: Path) -> tuple[Path, Path]:
     return vv_path, vh_path
 
 
-def get_s1rtc_chip_data(chip: TerraMindChip, image_sets: list[tuple[Path]]) -> xr.Dataset:
+def get_s1rtc_chip_data(chip: TerraMindChip, image_sets: list[utils.RtcImageSet]) -> xr.Dataset:
     roi = shapely.box(*chip.bounds)
     template = create_template_da(chip)
     timestep_arrays = []
     for image_set in image_sets:
         band_arrays = []
-        # Make sure order is always VV, VH
-        image_set = [[x for x in image_set if 'VV' in x.name][0], [x for x in image_set if 'VH' in x.name][0]]
-        for image_path in image_set:
+        for band in S1RTC_BANDS:
+            image_path = image_set._asdict()[band.lower()]
             da = rioxarray.open_rasterio(image_path).rio.clip_box(*roi.buffer(0.1).bounds, crs='EPSG:4326')  # type: ignore
             da_reproj = da.rio.reproject_match(template)
             band_arrays.append(da_reproj.data.squeeze())

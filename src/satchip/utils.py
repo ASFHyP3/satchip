@@ -1,11 +1,15 @@
 import datetime
 import warnings
+from collections import namedtuple
 from pathlib import Path
 from typing import TypedDict
 
 import xarray as xr
 import zarr
 from pyproj import CRS, Transformer
+
+
+RtcImageSet = namedtuple('RtcImageSet', ['vv', 'vh'])
 
 
 class ChipDataRequiredOpts(TypedDict):
@@ -16,7 +20,7 @@ class ChipDataRequiredOpts(TypedDict):
 
 class ChipDataOpts(ChipDataRequiredOpts, total=False):
     max_cloud_pct: int
-    local_hyp3_paths: dict[str, list[Path]]
+    local_hyp3_paths: dict[str, list[RtcImageSet]]
 
 
 def get_overall_bounds(bounds: list) -> list:
