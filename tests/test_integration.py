@@ -30,6 +30,7 @@ def create_dataset(outpath: Path, start: tuple[int, int]) -> None:
 def create_label_and_data(label_start_xy, out_dir, image_dir):
     label_tif = out_dir / 'train.tif'
     create_dataset(label_tif, label_start_xy)
+    breakpoint()
     chip_labels(label_tif, datetime.fromisoformat('20240115'), out_dir)
     for platform in ['S2L2A', 'HLS', 'S1RTC']:
         create_chips(
@@ -45,7 +46,7 @@ def create_label_and_data(label_start_xy, out_dir, image_dir):
 
 @pytest.mark.integration
 def test_integration():
-    data_dir = Path('data')
+    data_dir = Path('integration_test')
     train_dir = data_dir / 'train'
     train_dir.mkdir(parents=True, exist_ok=True)
     val_dir = data_dir / 'val'
