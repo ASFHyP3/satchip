@@ -6,23 +6,23 @@ import pytest
 from shapely.geometry import box, mapping
 
 from satchip import chip_sentinel1rtc
+from satchip import utils
 
 
 def test_bounds_check():
-    chip_sentinel1rtc._check_bounds_size([0, 0, 1, 1])
-    chip_sentinel1rtc._check_bounds_size([0, 0, 2.9, 1])
-    chip_sentinel1rtc._check_bounds_size([-107.79192, 45.74287, -105.01543, 46.48598])
+    chip_sentinel1rtc._check_bounds_size(utils.Bounds(0, 0, 1, 1))
+    chip_sentinel1rtc._check_bounds_size(utils.Bounds(0, 0, 2.9, 1))
+    chip_sentinel1rtc._check_bounds_size(utils.Bounds(-107.79192, 45.74287, -105.01543, 46.48598))
 
     with pytest.raises(AssertionError):
-        chip_sentinel1rtc._check_bounds_size([0, 0, 3, 1])
+        chip_sentinel1rtc._check_bounds_size(utils.Bounds(0, 0, 3, 1))
 
 
 def test_get_granules():
-    bounds = [-107.79192, 45.74287, -105.01543, 46.48598]
+    bounds = utils.Bounds(-107.79192, 45.74287, -105.01543, 46.48598)
     date_start = datetime.datetime(2020, 7, 7)
     date_end = date_start + datetime.timedelta(days=14)
 
-    mock_search_result = MagicMock()
     mock_search_result = ['granule1', 'granule2']
 
     with patch('satchip.chip_sentinel1rtc.asf.geo_search', return_value=mock_search_result) as mock_geo_search:
@@ -69,7 +69,7 @@ def test_get_slcs_for_each_chip_custom_intersect():
     chips = [chip1, chip2, chip3]
     granules = [granule1, granule2, granule3]
 
-    result = chip_sentinel1rtc._get_slcs_for_each_chip(chips, granules, strategy='BEST')
+    result = chip_sentinel1rtc._get_slcs_for_each_chip(chips, granules, strategy='BEST')  # type: ignore
 
     assert result['chip1'] == [granule1]
     assert result['chip2'] == [granule1]
@@ -96,10 +96,10 @@ def test_get_slcs_for_each_chip_with_different_strategies():
     chips = [chip1]
     granules = [granule1, granule2, granule3]
 
-    result = chip_sentinel1rtc._get_slcs_for_each_chip(chips, granules, strategy='BEST', intersection_pct=49)
+    result = chip_sentinel1rtc._get_slcs_for_each_chip(chips, granules, strategy='BEST', intersection_pct=49)  # type: ignore
     assert result['chip1'] == [granule3]
 
-    result = chip_sentinel1rtc._get_slcs_for_each_chip(chips, granules, strategy='ALL', intersection_pct=49)
+    result = chip_sentinel1rtc._get_slcs_for_each_chip(chips, granules, strategy='ALL', intersection_pct=49)  # type: ignore
     assert result['chip1'] == [granule3, granule2]
 
 
@@ -136,15 +136,33 @@ def test_get_rtcs_for():
     ):
 
         def mock_download_fn(job, scratch):
-            return Path(f'/tmp/{job.job_parameters["granules"][0]}_rtc.tif')
+            return utils.RtcImageSet(
+                Path(f'/tmp/{job.job_parameters["granules"][0]}_rtc_VV.tif'),
+                Path(f'/tmp/{job.job_parameters["granules"][0]}_rtc_VH.tif')
+            )
 
         mock_download.side_effect = mock_download_fn
 
         result = chip_sentinel1rtc._get_rtcs_for(slcs_for_chips, scratch_dir)
 
         expected = {
-            'chip_001': [Path('/tmp/SLC_1_rtc.tif'), Path('/tmp/SLC_2_rtc.tif')],
-            'chip_002': [Path('/tmp/SLC_3_rtc.tif'), Path('/tmp/SLC_4_rtc.tif')],
+            'chip_001': [
+                utils.RtcImageSet(
+                    Path('/tmp/SLC_1_rtc_VV.tif'),
+                    Path('/tmp/SLC_1_rtc_VH.tif'),
+                ), utils.RtcImageSet(
+                    Path('/tmp/SLC_2_rtc_VV.tif'),
+                    Path('/tmp/SLC_2_rtc_VH.tif'),
+                )],
+            'chip_002': [
+                utils.RtcImageSet(
+                    Path('/tmp/SLC_3_rtc_VV.tif'),
+                    Path('/tmp/SLC_3_rtc_VH.tif'),
+                ), utils.RtcImageSet(
+                    Path('/tmp/SLC_4_rtc_VV.tif'),
+                    Path('/tmp/SLC_4_rtc_VH.tif'),
+                )
+            ]
         }
 
         assert result == expected

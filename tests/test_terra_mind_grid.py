@@ -14,7 +14,7 @@ from satchip.terra_mind_grid import TerraMindGrid
 )
 def test_terra_mind_grid(tm_name, point):
     mt_name = f'{tm_name.split("_")[0]}_{tm_name.split("_")[1]}'
-    tmp_grid = TerraMindGrid([np.floor(point[1]), np.ceil(point[1])], [np.floor(point[0]), np.ceil(point[0])])
+    tmp_grid = TerraMindGrid((np.floor(point[1]), np.ceil(point[1])), (np.floor(point[0]), np.ceil(point[0])))
     # mt_chip = [x for x in tmp_grid.major_tom_chips if x.name == mt_name][0]
     chips = [x for x in tmp_grid.terra_mind_chips if x.name.startswith(mt_name)]
     in_lon = [x for x in chips if x.bounds[0] < point[0] < x.bounds[2]]

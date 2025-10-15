@@ -29,7 +29,7 @@ def get_rtc_paths_for_chips(
     return rtc_paths_for_chips
 
 
-def _check_bounds_size(bounds: list[float]) -> None:
+def _check_bounds_size(bounds: utils.Bounds) -> None:
     min_lon, min_lat, max_lon, max_lat = bounds
     MAX_BOUND_AREA_DEGREES = 3
     bounds_area_degrees = (max_lon - min_lon) * (max_lat - min_lat)
@@ -38,10 +38,10 @@ def _check_bounds_size(bounds: list[float]) -> None:
     assert bounds_area_degrees < MAX_BOUND_AREA_DEGREES, err_message
 
 
-def _get_granules(bounds: list[float], date_start: datetime, date_end: datetime) -> list[asf.S1Product]:
+def _get_granules(bounds: utils.Bounds, date_start: datetime, date_end: datetime) -> list[asf.S1Product]:
     date_start = date_start
     date_end = date_end + timedelta(days=1)  # inclusive end
-    roi = shapely.box(*bounds)  # type: ignore
+    roi = shapely.box(*bounds)
     search_results = asf.geo_search(
         intersectsWith=roi.wkt,
         start=date_start,
@@ -93,7 +93,7 @@ def _get_rtcs_for(
     paths_for_slc_name: dict[str, utils.RtcImageSet] = {}
     for job in finished_rtc_jobs:
         rtc_image_set = _download_hyp3_rtc(job, image_dir)
-        slc_name = job.job_parameters['granules'][0]  # type: ignore
+        slc_name = job.job_parameters['granules'][0]
         paths_for_slc_name[slc_name] = rtc_image_set
 
     rtc_paths_for_chips: dict[str, list[utils.RtcImageSet]] = {}
@@ -119,9 +119,9 @@ def _process_rtcs(slc_names: set[str]) -> hyp3_sdk.Batch:
 
     batch = hyp3_sdk.Batch(hyp3_jobs)
     batch = hyp3.watch(batch)
-    assert all([j.succeeded() for j in batch]), 'One or more HyP3 jobs failed'  # type: ignore
+    assert all([j.succeeded() for j in batch]), 'One or more HyP3 jobs failed'
 
-    return batch  # type: ignore
+    return batch
 
 
 def _get_rtc_jobs_by_scene_name(hyp3: hyp3_sdk.HyP3) -> dict[str, hyp3_sdk.Job]:
@@ -131,7 +131,7 @@ def _get_rtc_jobs_by_scene_name(hyp3: hyp3_sdk.HyP3) -> dict[str, hyp3_sdk.Job]:
         if not _is_valid_rtc_job(job):
             continue
 
-        name = job.job_parameters['granules'][0]  # type: ignore
+        name = job.job_parameters['granules'][0]
         jobs_by_scene_name[name] = job
 
     return jobs_by_scene_name
@@ -141,8 +141,8 @@ def _is_valid_rtc_job(job: hyp3_sdk.Job) -> bool:
     return (
         not job.failed()
         and not job.expired()
-        and job.job_parameters['radiometry'] == 'gamma0'  # type: ignore
-        and job.job_parameters['resolution'] == 20  # type: ignore
+        and job.job_parameters['radiometry'] == 'gamma0'
+        and job.job_parameters['resolution'] == 20
     )
 
 
@@ -167,7 +167,10 @@ def get_s1rtc_chip_data(chip: TerraMindChip, image_sets: list[utils.RtcImageSet]
         band_arrays = []
         for band in S1RTC_BANDS:
             image_path = image_set._asdict()[band.lower()]
-            da = rioxarray.open_rasterio(image_path).rio.clip_box(*roi.buffer(0.1).bounds, crs='EPSG:4326')  # type: ignore
+            da = rioxarray.open_rasterio(image_path)
+            assert isinstance(da, xr.DataArray | xr.Dataset)
+            da = da.rio.clip_box(*roi.buffer(0.1).bounds, crs='EPSG:4326')
+
             da_reproj = da.rio.reproject_match(template)
             band_arrays.append(da_reproj.data.squeeze())
         band_array = np.stack(band_arrays, axis=0)

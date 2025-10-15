@@ -2,7 +2,7 @@ import datetime
 import warnings
 from collections import namedtuple
 from pathlib import Path
-from typing import TypedDict
+from typing import TypedDict, NamedTuple
 
 import xarray as xr
 import zarr
@@ -10,6 +10,13 @@ from pyproj import CRS, Transformer
 
 
 RtcImageSet = namedtuple('RtcImageSet', ['vv', 'vh'])
+
+
+class Bounds(NamedTuple):
+    minx: float
+    miny: float
+    maxx: float
+    maxy: float
 
 
 class ChipDataRequiredOpts(TypedDict):
@@ -23,12 +30,12 @@ class ChipDataOpts(ChipDataRequiredOpts, total=False):
     local_hyp3_paths: dict[str, list[RtcImageSet]]
 
 
-def get_overall_bounds(bounds: list) -> list:
+def get_overall_bounds(bounds: list) -> Bounds:
     minx = min([b[0] for b in bounds])
     miny = min([b[1] for b in bounds])
     maxx = max([b[2] for b in bounds])
     maxy = max([b[3] for b in bounds])
-    return [minx, miny, maxx, maxy]
+    return Bounds(minx, miny, maxx, maxy)
 
 
 def get_epsg4326_point(x: float, y: float, in_epsg: int) -> tuple[float, float]:
@@ -52,15 +59,15 @@ def get_epsg4326_bbox(
 
 def save_chip(dataset: xr.Dataset, save_path: str | Path) -> None:
     """Save a zipped zarr archive"""
-    store = zarr.storage.ZipStore(save_path, mode='w')  # type: ignore
+    store = zarr.storage.ZipStore(save_path, mode='w')
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', message='Duplicate name:', module='zipfile')
-        dataset.to_zarr(store)
+        dataset.to_zarr(store)  # type: ignore[call-overload]
     store.close()
 
 
 def load_chip(label_path: str | Path) -> xr.Dataset:
     """Load a zipped zarr archive"""
-    store = zarr.storage.ZipStore(label_path, read_only=True)  # type: ignore
+    store = zarr.storage.ZipStore(label_path, read_only=True)
     dataset = xr.open_zarr(store)
     return dataset

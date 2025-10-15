@@ -129,7 +129,6 @@ class MajorTomGrid:
             )
             r_idx += 1
         points = gpd.GeoDataFrame(pd.concat(points_by_row))
-        # points.reset_index(inplace=True,drop=True)
         return points, points_by_row
 
     def group_points_by_row(self) -> gpd.GeoDataFrame:
@@ -137,6 +136,7 @@ class MajorTomGrid:
         points_by_row = [None] * len(self.rows)
         for i, row in enumerate(self.rows):
             points_by_row[i] = self.points[self.points.row == row]
+
         return points_by_row
 
     def filter_longitude(self, cols: tuple, lons: tuple) -> tuple:
