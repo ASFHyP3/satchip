@@ -63,6 +63,8 @@ chipview = "satchip.chip_view:main"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 script_launch_mode = "subprocess"
+addopts = '-ra -q -m "not integration"'
+markers = ["integration"]
 
 [tool.setuptools]
 include-package-data = true
