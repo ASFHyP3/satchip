@@ -1,6 +1,5 @@
 import datetime
 import warnings
-from collections import namedtuple
 from pathlib import Path
 from typing import TypedDict
 
@@ -9,7 +8,9 @@ import zarr
 from pyproj import CRS, Transformer
 
 
-RtcImageSet = namedtuple('RtcImageSet', ['VV', 'VH'])
+class RtcImageSet(TypedDict):
+    VV: Path
+    VH: Path
 
 
 class ChipDataRequiredOpts(TypedDict):
