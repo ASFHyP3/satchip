@@ -1,6 +1,5 @@
 import datetime
 import warnings
-from collections import namedtuple
 from pathlib import Path
 from typing import TypedDict, NamedTuple
 
@@ -9,7 +8,9 @@ import zarr
 from pyproj import CRS, Transformer
 
 
-RtcImageSet = namedtuple('RtcImageSet', ['vv', 'vh'])
+class RtcImageSet(TypedDict):
+    VV: Path
+    VH: Path
 
 
 class Bounds(NamedTuple):
