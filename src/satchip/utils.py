@@ -1,7 +1,7 @@
 import datetime
 import warnings
 from pathlib import Path
-from typing import TypedDict, NamedTuple
+from typing import NamedTuple, TypedDict
 
 import xarray as xr
 import zarr

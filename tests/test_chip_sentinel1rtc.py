@@ -5,8 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from shapely.geometry import box, mapping
 
-from satchip import chip_sentinel1rtc
-from satchip import utils
+from satchip import chip_sentinel1rtc, utils
 
 
 def test_bounds_check():
@@ -136,10 +135,10 @@ def test_get_rtcs_for():
     ):
 
         def mock_download_fn(job, scratch):
-            return utils.RtcImageSet(
-                Path(f'/tmp/{job.job_parameters["granules"][0]}_rtc_VV.tif'),
-                Path(f'/tmp/{job.job_parameters["granules"][0]}_rtc_VH.tif')
-            )
+            return {
+                'VV': Path(f'/tmp/{job.job_parameters["granules"][0]}_rtc_VV.tif'),
+                'VH': Path(f'/tmp/{job.job_parameters["granules"][0]}_rtc_VH.tif'),
+            }
 
         mock_download.side_effect = mock_download_fn
 
@@ -147,22 +146,25 @@ def test_get_rtcs_for():
 
         expected = {
             'chip_001': [
-                utils.RtcImageSet(
-                    Path('/tmp/SLC_1_rtc_VV.tif'),
-                    Path('/tmp/SLC_1_rtc_VH.tif'),
-                ), utils.RtcImageSet(
-                    Path('/tmp/SLC_2_rtc_VV.tif'),
-                    Path('/tmp/SLC_2_rtc_VH.tif'),
-                )],
+                {
+                    'VV': Path('/tmp/SLC_1_rtc_VV.tif'),
+                    'VH': Path('/tmp/SLC_1_rtc_VH.tif'),
+                },
+                {
+                    'VV': Path('/tmp/SLC_2_rtc_VV.tif'),
+                    'VH': Path('/tmp/SLC_2_rtc_VH.tif'),
+                },
+            ],
             'chip_002': [
-                utils.RtcImageSet(
-                    Path('/tmp/SLC_3_rtc_VV.tif'),
-                    Path('/tmp/SLC_3_rtc_VH.tif'),
-                ), utils.RtcImageSet(
-                    Path('/tmp/SLC_4_rtc_VV.tif'),
-                    Path('/tmp/SLC_4_rtc_VH.tif'),
-                )
-            ]
+                {
+                    'VV': Path('/tmp/SLC_3_rtc_VV.tif'),
+                    'VH': Path('/tmp/SLC_3_rtc_VH.tif'),
+                },
+                {
+                    'VV': Path('/tmp/SLC_4_rtc_VV.tif'),
+                    'VH': Path('/tmp/SLC_4_rtc_VH.tif'),
+                },
+            ],
         }
 
         assert result == expected
