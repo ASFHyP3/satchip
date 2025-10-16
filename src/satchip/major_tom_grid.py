@@ -45,7 +45,7 @@ class MajorTomGrid:
 
         # bound to range
         idxs = (latitudes >= self.latitude_range[0]) * (latitudes <= self.latitude_range[1])
-        rows, latitudes = np.array(rows), np.array(latitudes)   # type: ignore [assignment]
+        rows, latitudes = np.array(rows), np.array(latitudes)  # type: ignore [assignment]
         rows, latitudes = rows[idxs], latitudes[idxs]
 
         return rows, latitudes

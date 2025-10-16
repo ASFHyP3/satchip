@@ -13,7 +13,7 @@ from satchip.chip_xr_base import create_dataset_chip, create_template_da
 from satchip.terra_mind_grid import TerraMindChip
 
 
-S1RTC_BANDS = ("VV", "VH")
+S1RTC_BANDS = ('VV', 'VH')
 
 
 def get_rtc_paths_for_chips(
