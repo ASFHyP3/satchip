@@ -115,7 +115,7 @@ class MajorTomGrid:
                 epsgs.append(f'EPSG:{utm_zones[-1]}')
 
                 c_idx += 1
-            points_by_row[r_idx] = gpd.GeoDataFrame(
+            points_by_row[r_idx] = gpd.GeoDataFrame(  # type: ignore [call-overload]
                 {
                     'name': point_names,
                     'row': grid_row_names,
@@ -129,7 +129,7 @@ class MajorTomGrid:
             )
             r_idx += 1
         points = gpd.GeoDataFrame(pd.concat(points_by_row))
-        return points, points_by_row
+        return points, points_by_row  # type: ignore [unreachable]
 
     def group_points_by_row(self) -> gpd.GeoDataFrame:
         # Make list of different gdfs for each row
@@ -137,7 +137,7 @@ class MajorTomGrid:
         for i, row in enumerate(self.rows):
             points_by_row[i] = self.points[self.points.row == row]
 
-        return points_by_row
+        return points_by_row  # type: ignore[return-value]
 
     def filter_longitude(self, cols: tuple, lons: tuple) -> tuple:
         idxs = (lons >= self.longitude_range[0]) * (lons <= self.longitude_range[1])

@@ -13,7 +13,7 @@ from satchip.chip_xr_base import create_dataset_chip, create_template_da
 from satchip.terra_mind_grid import TerraMindChip
 
 
-S1RTC_BANDS = ['VV', 'VH']
+S1RTC_BANDS = ("VV", "VH")
 
 
 def get_rtc_paths_for_chips(
@@ -165,8 +165,7 @@ def get_s1rtc_chip_data(chip: TerraMindChip, image_sets: list[utils.RtcImageSet]
     timestep_arrays = []
     for image_set in image_sets:
         band_arrays = []
-        for band in S1RTC_BANDS:
-            image_path = image_set[band]
+        for image_path in [image_set['VV'], image_set['VH']]:
             da = rioxarray.open_rasterio(image_path)
             assert isinstance(da, xr.DataArray | xr.Dataset)
             da = da.rio.clip_box(*roi.buffer(0.1).bounds, crs='EPSG:4326')
