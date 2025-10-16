@@ -1,4 +1,5 @@
 import argparse
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
@@ -76,18 +77,22 @@ def create_chips(
     if platform in ['S2L2A', 'HLS']:
         opts['max_cloud_pct'] = max_cloud_pct
 
+    chips = [get_chip(p) for p in label_paths]
+    chip_names = [c.name for c in chips]
+    if len(chip_names) != len(set(chip_names)):
+        duplicates = [name for name, count in Counter(chip_names).items() if count > 1]
+        msg = f'Duplicate sample locations not supported. Duplicate chips: {", ".join(duplicates)}'
+        raise NotImplementedError(msg)
+    chip_paths = [
+        platform_dir / (x.with_suffix('').with_suffix('').name + f'_{platform}.zarr.zip') for x in label_paths
+    ]
     if platform == 'S1RTC':
-        chips = [get_chip(p) for p in label_paths]
         rtc_paths_for_chips = get_rtc_paths_for_chips(chips, image_dir, opts)
         opts['local_hyp3_paths'] = rtc_paths_for_chips
 
-    chip_paths = []
-    for label_path in tqdm(label_paths, desc='Chipping labels'):
-        chip = get_chip(label_path)
+    for chip, chip_path in tqdm(zip(chips, chip_paths), desc='Chipping labels'):
         dataset = chip_data(chip, platform, opts, image_dir)
-        chip_path = platform_dir / (label_path.with_suffix('').with_suffix('').name + f'_{platform}.zarr.zip')
         utils.save_chip(dataset, chip_path)
-        chip_paths.append(chip_path)
     return chip_paths
 
 
