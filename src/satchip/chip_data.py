@@ -1,4 +1,5 @@
 import argparse
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
@@ -77,6 +78,11 @@ def create_chips(
         opts['max_cloud_pct'] = max_cloud_pct
 
     chips = [get_chip(p) for p in label_paths]
+    chip_names = [c.name for c in chips]
+    if len(chip_names) != len(set(chip_names)):
+        duplicates = [name for name, count in Counter(chip_names).items() if count > 1]
+        msg = f'Duplicate sample locations not supported. Duplicate chips: {", ".join(duplicates)}'
+        raise NotImplementedError(msg)
     chip_paths = [
         platform_dir / (x.with_suffix('').with_suffix('').name + f'_{platform}.zarr.zip') for x in label_paths
     ]
