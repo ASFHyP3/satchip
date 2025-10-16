@@ -25,8 +25,8 @@ def get_rtc_paths_for_chips(
     slcs_for_chips = _get_slcs_for_each_chip(terra_mind_chips, granules, opts['strategy'])
     assert len(slcs_for_chips) == len(terra_mind_chips)
 
-    rtc_paths_for_chips = _get_rtcs_for(slcs_for_chips, image_dir)
-    return rtc_paths_for_chips
+    rtc_image_sets_for_chips = _get_rtcs_for(slcs_for_chips, image_dir)
+    return rtc_image_sets_for_chips
 
 
 def _check_bounds_size(bounds: list[float]) -> None:
@@ -90,18 +90,18 @@ def _get_rtcs_for(
 
     finished_rtc_jobs = _process_rtcs(slc_names)
 
-    paths_for_slc_name: dict[str, utils.RtcImageSet] = {}
+    image_set_for_slc_name: dict[str, utils.RtcImageSet] = {}
     for job in finished_rtc_jobs:
         rtc_image_set = _download_hyp3_rtc(job, image_dir)
         slc_name = job.job_parameters['granules'][0]  # type: ignore
-        paths_for_slc_name[slc_name] = rtc_image_set
+        image_set_for_slc_name[slc_name] = rtc_image_set
 
-    rtc_paths_for_chips: dict[str, list[utils.RtcImageSet]] = {}
+    image_sets_for_chips: dict[str, list[utils.RtcImageSet]] = {}
     for chip_name, chip_slcs in slcs_for_chips.items():
-        image_sets = [paths_for_slc_name[name.properties['sceneName']] for name in chip_slcs]
-        rtc_paths_for_chips[chip_name] = image_sets
+        image_sets = [image_set_for_slc_name[name.properties['sceneName']] for name in chip_slcs]
+        image_sets_for_chips[chip_name] = image_sets
 
-    return rtc_paths_for_chips
+    return image_sets_for_chips
 
 
 def _process_rtcs(slc_names: set[str]) -> hyp3_sdk.Batch:
@@ -155,7 +155,7 @@ def _download_hyp3_rtc(job: hyp3_sdk.Job, image_dir: Path) -> utils.RtcImageSet:
         hyp3_sdk.util.extract_zipped_product(output_zip)
     vv_path = list(output_dir.glob('*_VV.tif'))[0]
     vh_path = list(output_dir.glob('*_VH.tif'))[0]
-    image_set = utils.RtcImageSet(vv=vv_path, vh=vh_path)
+    image_set: utils.RtcImageSet = {'VV': vv_path, 'VH': vh_path}
     return image_set
 
 
@@ -166,13 +166,13 @@ def get_s1rtc_chip_data(chip: TerraMindChip, image_sets: list[utils.RtcImageSet]
     for image_set in image_sets:
         band_arrays = []
         for band in S1RTC_BANDS:
-            image_path = image_set._asdict()[band]
+            image_path = image_set[band]
             da = rioxarray.open_rasterio(image_path).rio.clip_box(*roi.buffer(0.1).bounds, crs='EPSG:4326')  # type: ignore
             da_reproj = da.rio.reproject_match(template)
             band_arrays.append(da_reproj.data.squeeze())
         band_array = np.stack(band_arrays, axis=0)
         timestep_arrays.append(band_array)
     data_array = np.stack(timestep_arrays, axis=0)
-    dates = [datetime.strptime(image_set[0].name.split('_')[2], '%Y%m%dT%H%M%S') for image_set in image_sets]
+    dates = [datetime.strptime(image_set['VV'].name.split('_')[2], '%Y%m%dT%H%M%S') for image_set in image_sets]
     dataset = create_dataset_chip(data_array, chip, dates, S1RTC_BANDS)
     return dataset
