@@ -1,10 +1,16 @@
 import datetime
+import warnings
 from pathlib import Path
 from typing import TypedDict
 
 import xarray as xr
 import zarr
 from pyproj import CRS, Transformer
+
+
+class RtcImageSet(TypedDict):
+    VV: Path
+    VH: Path
 
 
 class ChipDataRequiredOpts(TypedDict):
@@ -15,6 +21,15 @@ class ChipDataRequiredOpts(TypedDict):
 
 class ChipDataOpts(ChipDataRequiredOpts, total=False):
     max_cloud_pct: int
+    local_hyp3_paths: dict[str, list[RtcImageSet]]
+
+
+def get_overall_bounds(bounds: list) -> list:
+    minx = min([b[0] for b in bounds])
+    miny = min([b[1] for b in bounds])
+    maxx = max([b[2] for b in bounds])
+    maxy = max([b[3] for b in bounds])
+    return [minx, miny, maxx, maxy]
 
 
 def get_epsg4326_point(x: float, y: float, in_epsg: int) -> tuple[float, float]:
@@ -38,12 +53,15 @@ def get_epsg4326_bbox(
 
 def save_chip(dataset: xr.Dataset, save_path: str | Path) -> None:
     """Save a zipped zarr archive"""
-    store = zarr.storage.ZipStore(save_path, mode='w')
-    dataset.to_zarr(store)
+    store = zarr.storage.ZipStore(save_path, mode='w')  # type: ignore
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', message='Duplicate name:', module='zipfile')
+        dataset.to_zarr(store)
+    store.close()
 
 
 def load_chip(label_path: str | Path) -> xr.Dataset:
     """Load a zipped zarr archive"""
-    store = zarr.storage.ZipStore(label_path, read_only=True)
+    store = zarr.storage.ZipStore(label_path, read_only=True)  # type: ignore
     dataset = xr.open_zarr(store)
     return dataset
