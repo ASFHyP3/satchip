@@ -11,7 +11,7 @@ from satchip.chip_label import chip_labels
 gdal.UseExceptions()
 
 
-def create_dataset(outpath: Path, start: tuple[int, int]) -> None:
+def create_dataset(outpath: Path, start: tuple[int, int]) -> Path:
     x, y = start
     pixel_size = 10
     cols, rows = 512, 512
@@ -25,11 +25,10 @@ def create_dataset(outpath: Path, start: tuple[int, int]) -> None:
     dataset.GetRasterBand(1).WriteArray(array)
     dataset.FlushCache()
     dataset = None
+    return outpath
 
 
-def create_label_and_data(label_start_xy, out_dir, image_dir):
-    label_tif = out_dir / 'train.tif'
-    create_dataset(label_tif, label_start_xy)
+def create_label_and_data(label_tif, out_dir, image_dir):
     chip_labels(label_tif, datetime.fromisoformat('20240115'), out_dir)
     for platform in ['S2L2A', 'HLS', 'S1RTC']:
         create_chips(
@@ -54,5 +53,7 @@ def test_integration():
     image_dir = data_dir / 'images'
     image_dir.mkdir(parents=True, exist_ok=True)
 
-    create_label_and_data((431795, 3943142), train_dir, image_dir)
-    create_label_and_data((431795, 3943142 - 10 * 512), val_dir, image_dir)
+    train_tif = create_dataset(data_dir / 'train.tif', (431795, 3943142))
+    create_label_and_data(train_tif, train_dir, image_dir)
+    val_tif = create_dataset(data_dir / 'val.tif', (431795, 3943142 - 10 * 512))
+    create_label_and_data(val_tif, val_dir, image_dir)
