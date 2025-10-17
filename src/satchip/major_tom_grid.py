@@ -141,7 +141,7 @@ class MajorTomGrid:
 
         return points_by_row
 
-    def filter_longitude(self, cols: tuple, lons: tuple) -> tuple:
+    def filter_longitude(self, cols: np.ndarray, lons: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         idxs = (lons >= self.longitude_range[0]) * (lons <= self.longitude_range[1])
         cols, lons = cols[idxs], lons[idxs]
         return cols, lons
