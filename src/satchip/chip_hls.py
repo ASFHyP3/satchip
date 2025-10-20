@@ -129,6 +129,6 @@ def get_hls_data(chip: TerraMindChip, image_dir: Path, opts: utils.ChipDataOpts)
         band_array = np.stack(band_arrays, axis=0)
         timestep_arrays.append(band_array)
     data_array = np.stack(timestep_arrays, axis=0)
-    dates = [get_date(scene['umm']).replace(tzinfo=None) for scene in timesteps]  # type: ignore
+    dates = [get_date(scene['umm']).replace(tzinfo=None) for scene in timesteps]
     dataset = create_dataset_chip(data_array, chip, dates, list(HLS_L_BANDS.values()))
     return dataset

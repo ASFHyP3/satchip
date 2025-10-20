@@ -45,10 +45,10 @@ class MajorTomGrid:
 
         # bound to range
         idxs = (latitudes >= self.latitude_range[0]) * (latitudes <= self.latitude_range[1])
-        rows, latitudes = np.array(rows), np.array(latitudes)
-        rows, latitudes = rows[idxs], latitudes[idxs]
+        rows_indexed = np.array(rows)[idxs]
+        latitudes_indexed = np.array(latitudes)[idxs]
 
-        return rows, latitudes
+        return rows_indexed, latitudes_indexed
 
     def get_circumference_at_latitude(self, lat: float) -> float:
         # Circumference of the cross-section of a sphere at a given latitude
@@ -58,7 +58,9 @@ class MajorTomGrid:
 
         return circumference
 
-    def subdivide_circumference(self, lat: float, return_cols: bool = False) -> np.ndarray:
+    def subdivide_circumference(
+        self, lat: float, return_cols: bool = False
+    ) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
         # Provide a list of longitudes that subdivide the circumference of the earth at a given latitude
         # into equal parts as close as possible to dist
 
@@ -115,7 +117,7 @@ class MajorTomGrid:
                 epsgs.append(f'EPSG:{utm_zones[-1]}')
 
                 c_idx += 1
-            points_by_row[r_idx] = gpd.GeoDataFrame(
+            points_by_row[r_idx] = gpd.GeoDataFrame(  # type: ignore [call-overload]
                 {
                     'name': point_names,
                     'row': grid_row_names,
@@ -129,17 +131,17 @@ class MajorTomGrid:
             )
             r_idx += 1
         points = gpd.GeoDataFrame(pd.concat(points_by_row))
-        # points.reset_index(inplace=True,drop=True)
-        return points, points_by_row
+        return points, points_by_row  # type: ignore [unreachable]
 
-    def group_points_by_row(self) -> gpd.GeoDataFrame:
+    def group_points_by_row(self) -> list:
         # Make list of different gdfs for each row
         points_by_row = [None] * len(self.rows)
         for i, row in enumerate(self.rows):
             points_by_row[i] = self.points[self.points.row == row]
+
         return points_by_row
 
-    def filter_longitude(self, cols: tuple, lons: tuple) -> tuple:
+    def filter_longitude(self, cols: np.ndarray, lons: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         idxs = (lons >= self.longitude_range[0]) * (lons <= self.longitude_range[1])
         cols, lons = cols[idxs], lons[idxs]
         return cols, lons
