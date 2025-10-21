@@ -10,6 +10,7 @@ import shapely
 import xarray as xr
 from pystac.item import Item
 from pystac_client import Client
+from tqdm import tqdm
 
 from satchip import utils
 from satchip.chip_xr_base import create_dataset_chip, create_template_da
@@ -117,6 +118,16 @@ def get_scenes(
     return valid_scenes
 
 
+def get_latest_image_versions(items: list[Item]) -> list[Item]:
+    brief_ids = [item.id[:-5] for item in items]
+    latest_items = []
+    for brief_id in set(brief_ids):
+        matching_items = [item for item in items if item.id.startswith(brief_id)]
+        latest_item = max(matching_items, key=lambda x: int(x.properties['s2:sequence']))
+        latest_items.append(latest_item)
+    return latest_items
+
+
 def get_s2l2a_data(chip: TerraMindChip, image_dir: Path, opts: utils.ChipDataOpts) -> xr.Dataset:
     """Get XArray DataArray of Sentinel-2 L2A image for the given bounds and best collection parameters.
 
@@ -151,6 +162,7 @@ def get_s2l2a_data(chip: TerraMindChip, image_dir: Path, opts: utils.ChipDataOpt
         'Too many Sentinel-2 L2A scenes found for chip. Please narrow the date range.'
     )
     items = list(search.item_collection())
+    items = get_latest_image_versions(items)
     max_cloud_pct = opts.get('max_cloud_pct', 100)
     strategy = opts.get('strategy', 'BEST')
     timesteps = get_scenes(items, roi, strategy, max_cloud_pct, image_dir)
