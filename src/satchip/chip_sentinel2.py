@@ -66,7 +66,7 @@ def fetch_s3_file(url: str, image_dir: Path) -> Path:
     return local_path
 
 
-def multithread_fetch_s3_file(urls: list[str], image_dir: Path, max_workers: int = 8) -> None:
+def multithread_fetch_s3_file(urls: list[str], image_dir: Path, max_workers: int = 4) -> None:
     """Fetches multiple S3 files to the given image directory using multithreading."""
     s3_paths, download_paths = [], []
     for url in urls:
@@ -168,8 +168,9 @@ def get_s2l2a_data(chip: TerraMindChip, image_dir: Path, opts: utils.ChipDataOpt
     max_cloud_pct = opts.get('max_cloud_pct', 100)
     strategy = opts.get('strategy', 'BEST')
     timesteps = get_scenes(items, roi, strategy, max_cloud_pct, image_dir)
-    urls = [item.assets[S2_BANDS[band].lower()].href for item in items for band in S2_BANDS]
-    multithread_fetch_s3_file(urls, image_dir)
+
+    urls = [item.assets[S2_BANDS[band].lower()].href for item in timesteps for band in S2_BANDS]
+    [fetch_s3_file(url, image_dir) for url in urls]
     template = create_template_da(chip)
     timestep_arrays = []
     for item in timesteps:
