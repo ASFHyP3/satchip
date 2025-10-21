@@ -1,5 +1,4 @@
 from collections import OrderedDict
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlparse
@@ -64,19 +63,6 @@ def fetch_s3_file(url: str, image_dir: Path) -> Path:
         s3_path = url_to_s3path(url)
         S3_FS.get(s3_path, str(local_path))
     return local_path
-
-
-def multithread_fetch_s3_file(urls: list[str], image_dir: Path, max_workers: int = 4) -> None:
-    """Fetches multiple S3 files to the given image directory using multithreading."""
-    s3_paths, download_paths = [], []
-    for url in urls:
-        local_path = url_to_localpath(url, image_dir)
-        if not local_path.exists():
-            download_paths.append(local_path)
-            s3_paths.append(url_to_s3path(url))
-
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        executor.map(S3_FS.get, s3_paths, download_paths)
 
 
 def get_pct_intersect(scene_geom: dict | None, roi: shapely.geometry.Polygon) -> float:
