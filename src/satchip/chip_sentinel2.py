@@ -122,8 +122,10 @@ def get_latest_image_versions(items: list[Item]) -> list[Item]:
     latest_items = []
     for brief_id in set(brief_ids):
         matching_items = [item for item in items if item.id.startswith(brief_id)]
+
         def get_s2_version(item):
             return item.properties['s2:sequence']
+
         latest_item = max(matching_items, key=get_s2_version)
         latest_items.append(latest_item)
     return latest_items
