@@ -11,6 +11,12 @@ and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 * Add mypy to static analysis github action
 
+### Fixed
+* Bug that resulted in duplicates of Sentinel-2 data sometimes being selected
+
+### Changed
+* Switch from a multithreaded to a single threaded download approach for Sentinel-2.
+
 ## [0.5.0]
 
 ### Changed

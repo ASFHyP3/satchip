@@ -10,7 +10,6 @@ import shapely
 import xarray as xr
 from pystac.item import Item
 from pystac_client import Client
-from tqdm import tqdm
 
 from satchip import utils
 from satchip.chip_xr_base import create_dataset_chip, create_template_da
