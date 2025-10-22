@@ -166,7 +166,7 @@ def get_s2l2a_data(chip: TerraMindChip, image_dir: Path, opts: utils.ChipDataOpt
     strategy = opts.get('strategy', 'BEST')
     timesteps = get_scenes(items, roi, strategy, max_cloud_pct, image_dir)
 
-    urls = [item.assets[S2_BANDS[band].lower()].href for item in timesteps for band in S2_BANDS]
+    urls = [item.assets[band.lower()].href for item in timesteps for band in S2_BANDS.values()]
     [fetch_s3_file(url, image_dir) for url in urls]
     template = create_template_da(chip)
     timestep_arrays = []
