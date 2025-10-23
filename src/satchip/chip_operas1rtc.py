@@ -46,8 +46,8 @@ class RTCGroup:
             vh_paths.append(vh_path)
 
         vv_vrt = image_dir / f'{self.group_id}_VV.vrt'
-        vh_vrt = image_dir / f'{self.group_id}_VH.vrt'
         gdal.BuildVRT(str(vv_vrt), [str(p) for p in vv_paths])
+        vh_vrt = image_dir / f'{self.group_id}_VH.vrt'
         gdal.BuildVRT(str(vh_vrt), [str(p) for p in vh_paths])
 
         assert vv_vrt is not None and vh_vrt is not None, 'RTCGroup images not downloaded.'
