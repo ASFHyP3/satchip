@@ -10,8 +10,8 @@ from tqdm import tqdm
 
 from satchip import utils
 from satchip.chip_hls import get_hls_data
-from satchip.chip_operartc import get_operartc_data
-from satchip.chip_sentinel1rtc import get_rtc_paths_for_chips, get_s1rtc_chip_data
+from satchip.chip_hyp3s1rtc import get_rtc_paths_for_chips, get_s1rtc_chip_data
+from satchip.chip_operas1rtc import get_operartc_data
 from satchip.chip_sentinel2 import get_s2l2a_data
 from satchip.terra_mind_grid import TerraMindChip, TerraMindGrid
 
@@ -48,10 +48,10 @@ def chip_data(
     opts: utils.ChipDataOpts,
     image_dir: Path,
 ) -> xr.Dataset:
-    if platform == 'S1RTC':
+    if platform == 'HYP3S1RTC':
         rtc_paths = opts['local_hyp3_paths'][chip.name]
         chip_dataset = get_s1rtc_chip_data(chip, rtc_paths)
-    elif platform == 'OPERA':
+    elif platform == 'S1RTC':
         chip_dataset = get_operartc_data(chip, image_dir, opts=opts)
     elif platform == 'S2L2A':
         chip_dataset = get_s2l2a_data(chip, image_dir, opts=opts)
@@ -89,7 +89,7 @@ def create_chips(
     chip_paths = [
         platform_dir / (x.with_suffix('').with_suffix('').name + f'_{platform}.zarr.zip') for x in label_paths
     ]
-    if platform == 'S1RTC':
+    if platform == 'HYP3S1RTC':
         rtc_paths_for_chips = get_rtc_paths_for_chips(chips, image_dir, opts)
         opts['local_hyp3_paths'] = rtc_paths_for_chips
 
@@ -103,7 +103,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description='Chip a label image')
     parser.add_argument('labelpath', type=Path, help='Path to the label directory')
     parser.add_argument(
-        'platform', choices=['S2L2A', 'S1RTC', 'OPERA', 'HLS'], type=str, help='Dataset to create chips for'
+        'platform', choices=['S1RTC', 'S2L2A', 'HLS', 'HYP3S1RTC'], type=str, help='Dataset to create chips for'
     )
     parser.add_argument('daterange', type=str, help='Inclusive date range to search for data in the format Ymd-Ymd')
     parser.add_argument('--maxcloudpct', default=100, type=int, help='Maximum percent cloud cover for a data chip')
