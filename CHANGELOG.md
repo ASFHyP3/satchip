@@ -14,12 +14,10 @@ and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 * Names of platforms so OPERA RTC is `S1RTC` and HyP3 RTC is `HYP3S1RTC`.
+* Switch from a multithreaded to a single threaded download approach for Sentinel-2.
 
 ### Fixed
 * Bug that resulted in duplicates of Sentinel-2 data sometimes being selected
-
-### Changed
-* Switch from a multithreaded to a single threaded download approach for Sentinel-2.
 
 ## [0.5.0]
 
