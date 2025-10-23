@@ -32,14 +32,22 @@ def fill_missing_times(data_chip: xr.DataArray, times: np.ndarray) -> xr.DataArr
     return xr.concat([data_chip, missing_data], dim='time').sortby('time')
 
 
-def get_chip(label_path: Path) -> TerraMindChip:
-    label_dataset = utils.load_chip(label_path)
-    buffered = box(*label_dataset.bounds).buffer(0.1).bounds
-    grid = TerraMindGrid([buffered[1], buffered[3]], [buffered[0], buffered[2]])  # type: ignore
-    label_chip_name = label_dataset.sample.item()
-    chip = [c for c in grid.terra_mind_chips if c.name == label_chip_name]
-    assert len(chip) == 1, f'No TerraMind chip found for label {label_chip_name}'
-    return chip[0]
+def get_chips(label_paths: list[Path]) -> list[TerraMindChip]:
+    label_datasets = [utils.load_chip(label_path) for label_path in label_paths]
+    bounds = utils.get_overall_bounds([ds.bounds for ds in label_datasets])
+
+    buffered = box(*bounds).buffer(0.5).bounds
+    grid = TerraMindGrid(latitude_range=(buffered[1], buffered[3]), longitude_range=(buffered[0], buffered[2]))
+    grid_chips = {chip.name: chip for chip in grid.terra_mind_chips}
+
+    chips = []
+    for label_dataset in label_datasets:
+        label_chip_name = label_dataset.sample.item()
+        assert label_chip_name in grid_chips, f'No TerraMind chip found for label {label_chip_name}'
+        chip = grid_chips[label_chip_name]
+        chips.append(chip)
+
+    return chips
 
 
 def chip_data(
@@ -80,7 +88,7 @@ def create_chips(
     if platform in ['S2L2A', 'HLS']:
         opts['max_cloud_pct'] = max_cloud_pct
 
-    chips = [get_chip(p) for p in label_paths]
+    chips = get_chips(label_paths)
     chip_names = [c.name for c in chips]
     if len(chip_names) != len(set(chip_names)):
         duplicates = [name for name, count in Counter(chip_names).items() if count > 1]
