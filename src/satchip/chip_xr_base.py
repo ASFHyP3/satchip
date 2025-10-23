@@ -1,4 +1,5 @@
 import datetime
+from collections.abc import Sequence
 
 import numpy as np
 import xarray as xr
@@ -25,7 +26,7 @@ def create_dataset_chip(
     chip_array: np.ndarray,
     tm_chip: TerraMindChip,
     dates: list[datetime.datetime] | datetime.datetime,
-    bands: list[str],
+    bands: Sequence[str],
 ) -> xr.Dataset:
     x = tm_chip.minx + (np.arange(tm_chip.nrow) + 0.5) * tm_chip.xres
     y = tm_chip.maxy + (np.arange(tm_chip.ncol) + 0.5) * tm_chip.yres

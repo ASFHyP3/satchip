@@ -42,7 +42,8 @@ Similarly to step 1, this will produce an output zipped Zarr store that contains
 Currently supported datasets include:
 - `S2L2A`: Sentinel-2 L2A data sourced from the [Sentinel-2 AWS Open Data Archive](https://registry.opendata.aws/sentinel-2/)
 - `HLS`: Harmonized Landsat Sentinel-2 data sourced from [LP DAAC's Data Archive](https://www.earthdata.nasa.gov/data/projects/hls)
-- `S1RTC`: Sentinel-1 Radiometric Terrain Corrected (RTC) data created using [ASF's HyP3 on-demand platform](https://hyp3-docs.asf.alaska.edu/guides/rtc_product_guide/)
+- `S1RTC`: OPERA Sentinel-1 Radiometric Terrain Corrected (RTC) data from [ASF DAAC's Data Archive](https://www.jpl.nasa.gov/go/opera/products/rtc-product/)
+- `HYP3S1RTC`: Sentinel-1 Radiometric Terrain Corrected (RTC) data created using [ASF's HyP3 on-demand platform](https://hyp3-docs.asf.alaska.edu/guides/rtc_product_guide/)
 
 ## Tiling Schema
 

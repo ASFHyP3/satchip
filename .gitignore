@@ -245,3 +245,4 @@ tags
 *.zarr.zip
 *tif*
 integration_test/
+chips

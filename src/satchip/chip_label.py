@@ -27,7 +27,7 @@ def chip_labels(label_path: Path, date: datetime, chip_dir: Path) -> list[Path]:
     for tm_chip in tqdm(tm_grid.terra_mind_chips):
         chip = label.rio.reproject(
             dst_crs=f'EPSG:{tm_chip.epsg}',
-            resampling=rio.enums.Resampling(1),  # type: ignore
+            resampling=rio.enums.Resampling(1),
             transform=tm_chip.rio_transform,
             shape=(tm_chip.nrow, tm_chip.ncol),
         )
