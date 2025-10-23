@@ -23,25 +23,19 @@ S1RTC_BANDS = ('VV', 'VH')
 class RTCGroup:
     def __init__(self, granules: list[DataGranule]) -> None:
         self.granules = granules
-        self.ids = [get_product_id(g['umm']) for g in granules]
+        ids = [get_product_id(g['umm']) for g in granules]
         orbits = set([_get_orbit(g['umm']) for g in granules])
         assert len(orbits) == 1, 'RTCGroup can only contain granules from the same orbit.'
         self.orbit = orbits.pop()
-        self.group_id = self.ids[0][:40]
-        self.date = min([datetime.strptime(id.split('_')[4], '%Y%m%dT%H%M%SZ') for id in self.ids])
+        self.group_id = ids[0][:40]
+        self.date = min([datetime.strptime(id.split('_')[4], '%Y%m%dT%H%M%SZ') for id in ids])
         self.footprint = shapely.unary_union([get_geometry(g['umm']) for g in granules])
-        self.vv_paths = None
-        self.vv_vrt = None
-        self.vh_paths = None
-        self.vh_vrt = None
 
-    def download(self, image_dir: Path) -> None:
-        vv_paths = []
-        vh_paths = []
+    def download(self, image_dir: Path) -> tuple[Path, Path]:
+        vv_paths, vh_paths = [], []
         for granule in self.granules:
             id = get_product_id(granule['umm'])
-            files = list(image_dir.glob(f'{id}*.tif'))
-            names = [f.name for f in files]
+            names = [f.name for f in image_dir.glob(f'{id}*.tif')]
             if f'{id}_VV.tif' not in names or f'{id}_VH.tif' not in names:
                 earthaccess.download([granule], image_dir, pqdm_kwargs={'disable': True})
             vv_path = image_dir / f'{id}_VV.tif'
@@ -50,15 +44,15 @@ class RTCGroup:
             vh_path = image_dir / f'{id}_VH.tif'
             assert vh_path.exists(), f'Missing downloaded file: {vh_path}'
             vh_paths.append(vh_path)
-        self.vv_paths = vv_paths
-        self.vv_vrt = image_dir / f'{self.group_id}_VV.vrt'
-        gdal.BuildVRT(str(self.vv_vrt), [str(p) for p in vv_paths])
-        self.vh_paths = vh_paths
-        self.vh_vrt = image_dir / f'{self.group_id}_VH.vrt'
-        gdal.BuildVRT(str(self.vh_vrt), [str(p) for p in vh_paths])
 
-    def confirm_download(self) -> None:
-        assert self.vv_vrt is not None and self.vh_vrt is not None, 'RTCGroup images not downloaded.'
+        vv_vrt = image_dir / f'{self.group_id}_VV.vrt'
+        gdal.BuildVRT(str(vv_vrt), [str(p) for p in vv_paths])
+        vh_vrt = image_dir / f'{self.group_id}_VH.vrt'
+        gdal.BuildVRT(str(vh_vrt), [str(p) for p in vh_paths])
+
+        assert vv_vrt is not None and vh_vrt is not None, 'RTCGroup images not downloaded.'
+
+        return vv_vrt, vh_vrt
 
 
 def _get_pct_intersect(rtc_group: RTCGroup, roi: shapely.geometry.Polygon) -> int:
@@ -112,15 +106,13 @@ def get_operartc_data(chip: TerraMindChip, image_dir: Path, opts: utils.ChipData
     strategy = opts.get('strategy', 'BEST').upper()
     timesteps = get_scenes(rtc_groups, roi_buffered, strategy)
     assert len(timesteps) > 0, f'No OPERA RTC scenes found for chip {chip.name} between {date_start} and {date_end}.'
-    [timestep.download(image_dir) for timestep in timesteps]
+    vrts = [timestep.download(image_dir) for timestep in timesteps]
     template = create_template_da(chip)
     timestep_arrays = []
-    for scene in timesteps:
-        scene.confirm_download()
+    for vv, vh in vrts:
         band_arrays = []
-        for band in S1RTC_BANDS:
-            image_path = scene.vv_vrt if band == 'VV' else scene.vh_vrt
-            da = rioxarray.open_rasterio(image_path).rio.clip_box(*roi_buffered.bounds, crs='EPSG:4326')  # type: ignore
+        for vrt in (vv, vh):
+            da = rioxarray.open_rasterio(vrt).rio.clip_box(*roi_buffered.bounds, crs='EPSG:4326')  # type: ignore
             da_reproj = da.rio.reproject_match(template)
             band_arrays.append(da_reproj.data.squeeze())
         band_array = np.stack(band_arrays, axis=0)
