@@ -8,6 +8,7 @@ import rioxarray
 import shapely
 import xarray as xr
 from earthaccess.results import DataGranule
+from shapely.geometry import Polygon
 
 from satchip import utils
 from satchip.chip_xr_base import create_dataset_chip, create_template_da
@@ -39,11 +40,15 @@ HLS_S_BANDS = OrderedDict(
 BAND_SETS = {'L30': HLS_L_BANDS, 'S30': HLS_S_BANDS}
 
 
-def get_pct_intersect(umm: dict, roi: shapely.geometry.Polygon) -> float:
+def get_geometry(umm: dict) -> Polygon:
     points = umm['SpatialExtent']['HorizontalSpatialDomain']['Geometry']['GPolygons'][0]['Boundary']['Points']
     coords = [(pt['Longitude'], pt['Latitude']) for pt in points]
-    image_roi = shapely.geometry.Polygon(coords)
-    return int(np.round(roi.intersection(image_roi).area / roi.area * 100))
+    return shapely.geometry.Polygon(coords)
+
+
+def get_pct_intersect(umm: dict, roi: shapely.geometry.Polygon) -> float:
+    geometry = get_geometry(umm)
+    return int(np.round(roi.intersection(geometry).area / roi.area * 100))
 
 
 def get_date(umm: dict) -> datetime:

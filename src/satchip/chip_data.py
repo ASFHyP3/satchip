@@ -10,6 +10,7 @@ from tqdm import tqdm
 
 from satchip import utils
 from satchip.chip_hls import get_hls_data
+from satchip.chip_operartc import get_operartc_data
 from satchip.chip_sentinel1rtc import get_rtc_paths_for_chips, get_s1rtc_chip_data
 from satchip.chip_sentinel2 import get_s2l2a_data
 from satchip.terra_mind_grid import TerraMindChip, TerraMindGrid
@@ -50,6 +51,8 @@ def chip_data(
     if platform == 'S1RTC':
         rtc_paths = opts['local_hyp3_paths'][chip.name]
         chip_dataset = get_s1rtc_chip_data(chip, rtc_paths)
+    elif platform == 'OPERA':
+        chip_dataset = get_operartc_data(chip, image_dir, opts=opts)
     elif platform == 'S2L2A':
         chip_dataset = get_s2l2a_data(chip, image_dir, opts=opts)
     elif platform == 'HLS':
@@ -99,7 +102,9 @@ def create_chips(
 def main() -> None:
     parser = argparse.ArgumentParser(description='Chip a label image')
     parser.add_argument('labelpath', type=Path, help='Path to the label directory')
-    parser.add_argument('platform', choices=['S2L2A', 'S1RTC', 'HLS'], type=str, help='Dataset to create chips for')
+    parser.add_argument(
+        'platform', choices=['S2L2A', 'S1RTC', 'OPERA', 'HLS'], type=str, help='Dataset to create chips for'
+    )
     parser.add_argument('daterange', type=str, help='Inclusive date range to search for data in the format Ymd-Ymd')
     parser.add_argument('--maxcloudpct', default=100, type=int, help='Maximum percent cloud cover for a data chip')
     parser.add_argument('--chipdir', default='.', type=Path, help='Output directory for the chips')
