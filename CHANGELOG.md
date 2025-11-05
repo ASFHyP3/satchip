@@ -6,11 +6,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [PEP 440](https://www.python.org/dev/peps/pep-0440/)
 and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.6.1]
-
-### Changed
-* Updated github actions to use only ASF's GitHub secrets.  
-
 ## [0.6.0]
 
 ### Added
@@ -20,6 +15,7 @@ and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 * Names of platforms so OPERA RTC is `S1RTC` and HyP3 RTC is `HYP3S1RTC`.
 * Switch from a multithreaded to a single threaded download approach for Sentinel-2.
+* Updated github actions to use only ASF's GitHub secrets.  
 
 ### Fixed
 * Bug that resulted in duplicates of Sentinel-2 data sometimes being selected
