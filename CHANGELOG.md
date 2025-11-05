@@ -11,6 +11,7 @@ and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 * Add mypy to static analysis github action.
 * Support for RTC products.
+* New builds are now automatically published to PyPI on release. 
 
 ### Changed
 * Names of platforms so OPERA RTC is `S1RTC` and HyP3 RTC is `HYP3S1RTC`.
