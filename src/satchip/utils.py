@@ -20,15 +20,23 @@ class Bounds(NamedTuple):
     maxy: float
 
 
+class DateRange(NamedTuple):
+    start: datetime.datetime
+    end: datetime.datetime
+
+
 class ChipDataRequiredOpts(TypedDict):
     strategy: str
-    date_start: datetime.datetime
-    date_end: datetime.datetime
+    dates: DateRange | list[datetime.datetime]
 
 
 class ChipDataOpts(ChipDataRequiredOpts, total=False):
     max_cloud_pct: int
     local_hyp3_paths: dict[str, list[RtcImageSet]]
+
+
+def dates_error_msg(dates: DateRange | list[datetime.datetime]) -> str:
+    return f'between {dates.start} and {dates.end}' if isinstance(dates, DateRange) else f'for dates {dates}'
 
 
 def get_overall_bounds(bounds: list) -> Bounds:
