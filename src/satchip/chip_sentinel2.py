@@ -96,6 +96,7 @@ def get_scenes(
     items = [item for item in items if get_pct_intersect(item.geometry, roi) > 0.95]
     best_first = sorted(items, key=lambda x: (-get_pct_intersect(x.geometry, roi), x.datetime))
     valid_scenes = []
+
     for item in best_first:
         scl_href = item.assets['scl'].href
         local_path = fetch_s3_file(scl_href, image_dir)
@@ -131,6 +132,36 @@ def get_latest_image_versions(items: list[Item]) -> list[Item]:
     return latest_items
 
 
+def search_for_data(dates: utils.DateRange | list[datetime], roi: shapely.Polygon) -> list:
+    results = []
+    client = Client.open('https://earth-search.aws.element84.com/v1')
+
+    if isinstance(dates, utils.DateRange):
+        date_end = dates.end + timedelta(days=1)
+        date_range = f'{datetime.strftime(dates.start, "%Y-%m-%d")}/{datetime.strftime(date_end, "%Y-%m-%d")}'
+        search = client.search(
+            collections=['sentinel-2-l2a'],
+            intersects=roi,
+            datetime=date_range,
+            max_items=1000,
+        )
+
+        results = list(search.item_collection())
+    else:
+        for date in dates:
+            search = client.search(
+                collections=['sentinel-2-l2a'],
+                intersects=roi,
+                datetime=datetime.strftime(date, '%Y-%m-%d'),
+                max_items=1000,
+            )
+            results.extend(search.item_collection())
+
+    results = get_latest_image_versions(results)
+
+    return results
+
+
 def get_s2l2a_data(chip: TerraMindChip, image_dir: Path, opts: utils.ChipDataOpts) -> xr.Dataset:
     """Get XArray DataArray of Sentinel-2 L2A image for the given bounds and best collection parameters.
 
@@ -146,28 +177,19 @@ def get_s2l2a_data(chip: TerraMindChip, image_dir: Path, opts: utils.ChipDataOpt
     Returns:
         XArray Dataset containing the Sentinel-2 L2A image data.
     """
-    date_start = opts['date_start']
-    date_end = opts['date_end'] + timedelta(days=1)  # inclusive end
-    date_range = f'{datetime.strftime(date_start, "%Y-%m-%d")}/{datetime.strftime(date_end, "%Y-%m-%d")}'
+    dates = opts['dates']
+
     roi = shapely.box(*chip.bounds)
     roi_buffered = roi.buffer(0.01)
-    client = Client.open('https://earth-search.aws.element84.com/v1')
-    search = client.search(
-        collections=['sentinel-2-l2a'],
-        intersects=roi,
-        datetime=date_range,
-        max_items=1000,
-    )
-    assert len(search.item_collection()) > 0, (
-        f'No Sentinel-2 L2A scenes found for chip {chip.name} between {date_start} and {date_end}.'
-    )
-    assert len(search.item_collection()) < 1000, (
-        'Too many Sentinel-2 L2A scenes found for chip. Please narrow the date range.'
-    )
-    items = list(search.item_collection())
-    items = get_latest_image_versions(items)
+
+    items = search_for_data(dates, roi)
     max_cloud_pct = opts.get('max_cloud_pct', 100)
     strategy = opts.get('strategy', 'BEST')
+
+    assert len(items) > 0, (
+        f'No Sentinel-2 L2A scenes found for chip {chip.name} between {utils.dates_error_msg(dates)}.'
+    )
+    assert len(items) < 1000, 'Too many Sentinel-2 L2A scenes found for chip. Please narrow the date range.'
     timesteps = get_scenes(items, roi, strategy, max_cloud_pct, image_dir)
 
     urls = [item.assets[band.lower()].href for item in timesteps for band in S2_BANDS.values()]
