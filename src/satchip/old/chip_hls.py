@@ -15,6 +15,8 @@ from satchip.chip_xr_base import create_dataset_chip, create_template_da
 from satchip.terra_mind_grid import TerraMindChip
 
 
+earthaccess.login()
+
 HLS_L_BANDS = OrderedDict(
     {
         'B01': 'COASTAL',
@@ -78,19 +80,25 @@ def get_scenes(
     Returns:
         The best HLS items.
     """
-    assert strategy in ['BEST', 'ALL'], 'Strategy must be either BEST or ALL'
+    assert strategy in ['BEST', 'ALL', 'SPECIFIC'], 'Strategy must be either BEST or ALL'
     overlapping_items = [x for x in items if get_pct_intersect(x['umm'], roi) > 95]
     best_first = sorted(overlapping_items, key=lambda x: (-get_pct_intersect(x['umm'], roi), get_date(x['umm'])))
+
     valid_scenes = []
+
     for item in best_first:
         product_id = get_product_id(item['umm'])
         n_products = len(list(image_dir.glob(f'{product_id}*')))
+
         if n_products < 15:
             earthaccess.download([item], image_dir, pqdm_kwargs={'disable': True})
+
         fmask_path = image_dir / f'{product_id}.v2.0.Fmask.tif'
         assert fmask_path.exists(), f'File not found: {fmask_path}'
+
         qual_da = rioxarray.open_rasterio(fmask_path).rio.clip_box(*roi.bounds, crs='EPSG:4326')  # type: ignore
         bit_masks = np.unpackbits(qual_da.data[0][..., np.newaxis], axis=-1)
+
         # Looks for a 1 in the 4th, 6th and 7th bit of the Fmask (reverse order). See table 9 and appendix A of:
         # https://lpdaac.usgs.gov/documents/1698/HLS_User_Guide_V2.pdf
         bad_pixels = (bit_masks[..., 4] == 1) | (bit_masks[..., 6] == 1) | (bit_masks[..., 7] == 1)
@@ -104,22 +112,38 @@ def get_scenes(
     return valid_scenes
 
 
+def search_for_data(dates: utils.DateRange | list[datetime], bounds: utils.Bounds) -> list:
+    results = []
+    if isinstance(dates, utils.DateRange):
+        results = earthaccess.search_data(
+            short_name=['HLSL30', 'HLSS30'], bounding_box=bounds, temporal=(dates.start, dates.end + timedelta(days=1))
+        )
+    else:
+        for date in dates:
+            day_results = earthaccess.search_data(
+                short_name=['HLSL30', 'HLSS30'], bounding_box=bounds, temporal=(date, date + timedelta(days=1))
+            )
+            results.extend(day_results)
+
+    return results
+
+
 def get_hls_data(chip: TerraMindChip, image_dir: Path, opts: utils.ChipDataOpts) -> xr.Dataset:
     """Returns XArray DataArray of a Harmonized Landsat Sentinel-2 image for the given bounds and
     closest collection after date.
     """
-    date_start = opts['date_start']
-    date_end = opts['date_end'] + timedelta(days=1)  # inclusive end
-    earthaccess.login()
-    results = earthaccess.search_data(
-        short_name=['HLSL30', 'HLSS30'], bounding_box=chip.bounds, temporal=(date_start, date_end)
-    )
-    assert len(results) > 0, f'No HLS scenes found for chip {chip.name} between {date_start} and {date_end}.'
+    dates = opts['dates']
+
+    results = search_for_data(dates, utils.Bounds(*chip.bounds))
+    assert len(results) > 0, f'No HLS scenes found for chip {chip.name} {utils.dates_error_msg(dates)}.'
+
     roi = shapely.box(*chip.bounds)
     roi_buffered = roi.buffer(0.01)
     max_cloud_pct = opts.get('max_cloud_pct', 100)
     strategy = opts.get('strategy', 'BEST').upper()
-    timesteps = get_scenes(results, roi, max_cloud_pct, strategy, image_dir)
+
+    timesteps = get_scenes(results, roi_buffered, max_cloud_pct, strategy, image_dir)
+
     template = create_template_da(chip)
     timestep_arrays = []
     for scene in timesteps:

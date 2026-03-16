@@ -87,25 +87,54 @@ def get_scenes(groups: list[RTCGroup], roi: shapely.geometry.Polygon, strategy: 
         return intersecting[:1]
     elif strategy == 'ALL':
         return intersecting
+    elif strategy == 'SPECIFIC':
+        return intersecting
     else:
         raise ValueError(f'Strategy must be either BEST or ALL. Got {strategy}')
 
 
+@utils.retry_on_connection_error(max_retries=5, backoff_factor=2)
+def search_for_data(dates: utils.DateRange | list[datetime], bounds: utils.Bounds) -> list:
+    results = []
+
+    if isinstance(dates, utils.DateRange):
+        results = earthaccess.search_data(
+            short_name=['OPERA_L2_RTC-S1_V1'],
+            bounding_box=bounds,
+            temporal=(dates.start, dates.end + timedelta(days=1)),
+        )
+    else:
+        for date in dates:
+            day_results = earthaccess.search_data(
+                short_name=['OPERA_L2_RTC-S1_V1'], bounding_box=bounds, temporal=(date, date + timedelta(days=1))
+            )
+            results.extend(day_results)
+
+    return results
+
+
 def get_operartc_data(chip: TerraMindChip, image_dir: Path, opts: utils.ChipDataOpts) -> xr.Dataset:
     """Returns XArray DataArray of a OPERA S1-RTC for the given chip and selection startegy."""
-    date_start = opts['date_start']
-    date_end = opts['date_end'] + timedelta(days=1)  # inclusive end
-    earthaccess.login()
-    results = earthaccess.search_data(
-        short_name=['OPERA_L2_RTC-S1_V1'], bounding_box=chip.bounds, temporal=(date_start, date_end)
-    )
-    results = filter_to_dualpol(results)
-    rtc_groups = group_rtcs(results)
+
+    dates = opts['dates']
+
     roi = shapely.box(*chip.bounds)
     roi_buffered = roi.buffer(0.01)
+
+    results = search_for_data(dates, utils.Bounds(*roi_buffered.bounds))
+    dualpol = filter_to_dualpol(results)
+
+    rtc_groups = group_rtcs(dualpol)
     strategy = opts.get('strategy', 'BEST').upper()
     timesteps = get_scenes(rtc_groups, roi_buffered, strategy)
-    assert len(timesteps) > 0, f'No OPERA RTC scenes found for chip {chip.name} between {date_start} and {date_end}.'
+
+    assert len(timesteps) > 0, f'No OPERA RTC scenes found for chip {chip.name} {utils.dates_error_msg(dates)}'
+
+    if isinstance(dates, list):
+        print(dates, timesteps)
+        breakpoint()
+        assert len(timesteps) == len(dates)
+
     vrts = [timestep.download(image_dir) for timestep in timesteps]
     template = create_template_da(chip)
     timestep_arrays = []
