@@ -72,48 +72,48 @@ def main(modalities: list[Modality]):
     keepers = [1442, 622]
     gdf = gdf[gdf["swathID"].isin(keepers)]
 
-    # earthaccess.login()
+    earthaccess.login()
 
-    # tm_chips = []
-    #
-    # for i, (swathID, swath) in enumerate(gdf.iterrows(), start=1):
-    #     swathID = f"{int(swath['swathID']):04d}"
-    #     print(f'Processing  Swath {swathID} ({i} / {len(gdf)})')
-    #
-    #     merged = mosaic.data_over_swath(swath, modalities, output_path=data_paths['MERGED'])
-    #
-    #     template_path = merged[modalities[0].id]['BANDS']
-    #     event_tif, mask_tif = _generate_masks(
-    #         template_path, swathID, swath
-    #     )
-    #
-    #     merged_data = {
-    #         **merged,
-    #         "EVENT": event_tif,
-    #         "MASK": mask_tif,
-    #     }
-    #
-    #     if not all(is_valid_data(merged_data, modality) for modality in modalities):
-    #         print("Skipping: not enough valid data")
-    #         continue
-    #
-    #     for modality in modalities:
-    #         print(f"Chipping {modality.id}!")
-    #         chips = _chip_data(merged_data, data_paths['CHIPS_ALL'], modality)
-    #
-    #         good_chips = filter_chips(chips, modality)
-    #         print(f"Found {len(good_chips)} good chips")
-    #
-    #         for chip in good_chips:
-    #             for band, chip_path in chip.items():
-    #                 if band not in ("MASK", "BANDS"):
-    #                     continue
-    #
-    #                 dest = data_paths["CHIPS"] / chip_path.name
-    #                 shutil.copy(chip_path, dest)
-    #
-    #         tm_chips += good_chips
-    #
+    tm_chips = []
+
+    for i, (swathID, swath) in enumerate(gdf.iterrows(), start=1):
+        swathID = f"{int(swath['swathID']):04d}"
+        print(f'Processing  Swath {swathID} ({i} / {len(gdf)})')
+
+        merged = mosaic.data_over_swath(swath, modalities, output_path=data_paths['MERGED'])
+
+        template_path = merged[modalities[0].id]['BANDS']
+        event_tif, mask_tif = _generate_masks(
+            template_path, swathID, swath
+        )
+
+        merged_data = {
+            **merged,
+            "EVENT": event_tif,
+            "MASK": mask_tif,
+        }
+
+        if not all(is_valid_data(merged_data, modality) for modality in modalities):
+            print("Skipping: not enough valid data")
+            continue
+
+        for modality in modalities:
+            print(f"Chipping {modality.id}!")
+            chips = _chip_data(merged_data, data_paths['CHIPS_ALL'], modality)
+
+            good_chips = filter_chips(chips, modality)
+            print(f"Found {len(good_chips)} good chips")
+
+            for chip in good_chips:
+                for band, chip_path in chip.items():
+                    if band not in ("MASK", "BANDS"):
+                        continue
+
+                    dest = data_paths["CHIPS"] / chip_path.name
+                    shutil.copy(chip_path, dest)
+
+            tm_chips += good_chips
+
     for _, swath in gdf.iterrows():
         swath_id = _make_swath_id(swath["swathID"])
 
