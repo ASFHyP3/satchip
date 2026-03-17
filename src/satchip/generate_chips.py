@@ -35,6 +35,7 @@ MODALITY = "HLS"
 ALL_BANDS = ("B", "G", "R", "N", "SW1", "SW2", "Fmask")
 STACK_BANDS = ("B", "G", "R", "N", "SW1", "SW2")
 CHIP_BANDS = ("BANDS", "EVENT", "MASK", "Fmask")
+SHOULD_CLEANUP = False
 
 
 def main(modalities: list[Modality]):
@@ -45,97 +46,107 @@ def main(modalities: list[Modality]):
         "CHIPS_ALL": hwds_path / "CHIPS_ALL",
         "CHIPS": hwds_path / "CHIPS",
         "MERGED": hwds_path / "MERGED",
+        "PLOTS": hwds_path / 'PLOTS'
     }
 
-    for p in ("CHIPS", "CHIPS_ALL"):
-        shutil.rmtree(data_paths[p], ignore_errors=True)
+    if SHOULD_CLEANUP:
+        for item in data_paths['MERGED'].glob('*.tif'):
+            if item.is_dir():
+                continue
+
+            item.unlink()
+
+        for p in ("CHIPS", "CHIPS_ALL"):
+            shutil.rmtree(data_paths[p], ignore_errors=True)
 
     for p in data_paths.values():
         p.mkdir(parents=True, exist_ok=True)
 
-    gdf = _load_event_database_with_buffer(hwds_path)
+    gdf = _load_event_database(hwds_path)
     gdf_utm = gdf.to_crs(32615)
     gdf["buffered_event"] = gdf_utm.buffer(3000).to_crs(4326)
     gdf["buffered_event_background"] = gdf_utm.buffer(10000).to_crs(4326)
+    gdf = gdf.to_crs(4326)
 
     # keepers = [1442, 622, 1079, 628]
-    # keepers = [1442, 622]
-    # gdf = gdf[gdf["swathID"].isin(keepers)]
+    keepers = [1442, 622]
+    gdf = gdf[gdf["swathID"].isin(keepers)]
 
-    earthaccess.login()
+    # earthaccess.login()
 
-    tm_chips = []
-
-    for i, (swathID, swath) in enumerate(gdf.iterrows(), start=1):
-        swathID = f"{int(swath['swathID']):04d}"
-        print(f'Processing  Swath {swathID} ({i} / {len(gdf)})')
-
-        merged = mosaic.data_over_swath(swath, modalities, output_path=data_paths['MERGED'])
-
-        template_path = merged[modalities[0].id]['BANDS']
-        event_tif, mask_tif = _generate_masks(
-            template_path, swathID, swath
-        )
-
-        merged_data = {
-            **merged,
-            "EVENT": event_tif,
-            "MASK": mask_tif,
-        }
-
-        breakpoint()
-
-        if not all(is_valid_data(merged_data, modality) for modality in modalities):
-            print("Skipping: not enough valid data")
-            continue
-
-        breakpoint()
-
-        print("Chipping!")
-        chips = _chip_data(merged_data, data_paths)
-
-        good_chips = filter_chips(chips)
-        print(f"Found {len(good_chips)} good chips")
-
-        for chip in good_chips:
-            for band, chip_path in chip.items():
-                if band not in ("MASK", "BANDS"):
-                    continue
-
-                dest = data_paths["CHIPS_TM"] / chip_path.name
-                shutil.copy(chip_path, dest)
-
-        tm_chips += good_chips
-
+    # tm_chips = []
+    #
+    # for i, (swathID, swath) in enumerate(gdf.iterrows(), start=1):
+    #     swathID = f"{int(swath['swathID']):04d}"
+    #     print(f'Processing  Swath {swathID} ({i} / {len(gdf)})')
+    #
+    #     merged = mosaic.data_over_swath(swath, modalities, output_path=data_paths['MERGED'])
+    #
+    #     template_path = merged[modalities[0].id]['BANDS']
+    #     event_tif, mask_tif = _generate_masks(
+    #         template_path, swathID, swath
+    #     )
+    #
+    #     merged_data = {
+    #         **merged,
+    #         "EVENT": event_tif,
+    #         "MASK": mask_tif,
+    #     }
+    #
+    #     if not all(is_valid_data(merged_data, modality) for modality in modalities):
+    #         print("Skipping: not enough valid data")
+    #         continue
+    #
+    #     for modality in modalities:
+    #         print(f"Chipping {modality.id}!")
+    #         chips = _chip_data(merged_data, data_paths['CHIPS_ALL'], modality)
+    #
+    #         good_chips = filter_chips(chips, modality)
+    #         print(f"Found {len(good_chips)} good chips")
+    #
+    #         for chip in good_chips:
+    #             for band, chip_path in chip.items():
+    #                 if band not in ("MASK", "BANDS"):
+    #                     continue
+    #
+    #                 dest = data_paths["CHIPS"] / chip_path.name
+    #                 shutil.copy(chip_path, dest)
+    #
+    #         tm_chips += good_chips
+    #
     for _, swath in gdf.iterrows():
         swath_id = _make_swath_id(swath["swathID"])
 
-        merged_file = list(data_paths["MERGED"].glob(f"{swath_id}.*BANDS.tif"))
-        if len(merged_file) == 0:
-            print(f"no chips for {swath_id}")
-            continue
+        for modality in modalities:
+            merged_file = list(data_paths["MERGED"].glob(f"{swath_id}.{modality.id}.*.BANDS.tif"))
 
-        all_chips = list(data_paths["CHIPS"].glob(f"*.{swath_id}.*.tif"))
-        good_chips = list(data_paths["CHIPS_TM"].glob(f"*.{swath_id}.*.tif"))
+            if len(merged_file) == 0:
+                print(f"no chips for {swath_id}")
+                continue
 
-        print(f"plotting {swath_id}")
-        _plot_chips(
-            merged_file[0], all_chips, good_chips, swath, save_to=data_paths["PLOTS"]
+            all_chips = list(data_paths["CHIPS_ALL"].glob(f"*.{swath_id}.{modality.id}.*.tif"))
+            good_chips = list(data_paths["CHIPS"].glob(f"*.{swath_id}.{modality.id}.*.tif"))
+
+            print(f"plotting {swath_id}")
+            _plot_chips(
+                merged_file[0], all_chips, good_chips, swath, modality, save_to=data_paths["PLOTS"]
+            )
+
+    for modality in modalities:
+        print(f'Calulating stats for modality: {modality.id}')
+        band_chips = list(data_paths["CHIPS"].glob(f"*.{modality.id}.*.BANDS.tif"))
+
+        means, stds = calculate_stats(chips=band_chips, n_bands=len(modality.stack_bands))
+
+        means_str = ", ".join(f"{x:.4f}" for x in means)
+        stds_str = ", ".join(f"{x:.4f}" for x in stds)
+
+        stats_str = (
+            f"Means {modality.stack_bands}: {means_str}\n"
+            f"Stds {modality.stack_bands}: {stds_str}\n"
         )
-
-    band_chips = list(data_paths["CHIPS_TM"].glob("*BANDS.tif"))
-
-    means, stds = calculate_stats(chips=band_chips)
-
-    means_str = ", ".join(f"{x:.4f}" for x in means)
-    stds_str = ", ".join(f"{x:.4f}" for x in stds)
-
-    stats_str = (
-        f"Means {STACK_BANDS}: {means_str}\n"
-        f"Stds {STACK_BANDS}: {stds_str}\n"
-    )
-    (hwds_path / 'statistics.txt').write_text(stats_str)
-    print(stats_str)
+        (hwds_path / '{modality.id}-statistics.txt').write_text(stats_str)
+        print(stats_str)
 
 
 def _generate_masks(
@@ -176,7 +187,7 @@ def _generate_masks(
     return event_path, mask_path
 
 
-def _load_event_database_with_buffer(data_dir: Path):
+def _load_event_database(data_dir: Path):
     # use 60-swath version
     hwds_google_drive_id = "1h_JIEcrrUF3OSTrmwAKNPa0eUEhPA2Xx"
     drive_url = f"https://drive.google.com/uc?id={hwds_google_drive_id}"
@@ -255,6 +266,7 @@ def _plot_chips(
     all_chips,
     good_chips,
     swath,
+    modality,
     save_to: Path | None = None,
     quite=QUITE,
 ):
@@ -265,7 +277,7 @@ def _plot_chips(
         full_extent = [bounds.left, bounds.right, bounds.bottom, bounds.top]
         band_data = ds.read()
 
-    img = get_img(band_data)
+    img = get_img(band_data, modality)
 
     # plot BANDS and geom
     fig, ax = plt.subplots(
@@ -326,11 +338,11 @@ def _make_swath_id(swathID):
     return f"{int(swathID):04d}"
 
 
-def _chip_data(merged: dict[str, Path], data_paths: dict[str, Path], chip_size=CHIP_SIZE):
+def _chip_data(merged, output_path: Path, modality: Modality, chip_size=CHIP_SIZE):
     chips = {}
-
     grid = []
-    with rasterio.open(merged["BANDS"]) as ref:
+
+    with rasterio.open(merged[modality.id]["BANDS"]) as ref:
         n_cols = ref.width // chip_size
         n_rows = ref.height // chip_size
 
@@ -343,8 +355,11 @@ def _chip_data(merged: dict[str, Path], data_paths: dict[str, Path], chip_size=C
                 chips[tile_id] = {}
                 grid.append((tile_id, bounds))
 
-    for chip_layer in CHIP_BANDS:
-        layer_path = merged[chip_layer]
+    for chip_layer in modality.chip_bands:
+        if chip_layer in merged[modality.id]:
+            layer_path = merged[modality.id][chip_layer]
+        else:
+            layer_path = merged[chip_layer]
 
         with rasterio.open(layer_path) as src:
             for tile_id, bounds in grid:
@@ -359,7 +374,7 @@ def _chip_data(merged: dict[str, Path], data_paths: dict[str, Path], chip_size=C
                 data = src.read(window=window)
 
                 if chip_layer == 'BANDS':
-                    data = data_transform(data)
+                    data = data_transform(data, modality)
 
                 chip_meta = src.meta.copy()
                 chip_meta.update(
@@ -371,7 +386,7 @@ def _chip_data(merged: dict[str, Path], data_paths: dict[str, Path], chip_size=C
                 )
 
                 chip_name = f"{tile_id}.{layer_path.name}"
-                chip_path = data_paths["CHIPS"] / chip_name
+                chip_path = output_path / chip_name
 
                 with rasterio.open(chip_path, "w", **chip_meta) as dst:
                     dst.write(data)
@@ -386,34 +401,32 @@ def is_valid_data(merged, modality):
 
     if modality.id == 'HLS':
         is_valid = hls.is_valid_hls(merged_data['Fmask'], merged['EVENT'])
-        print('HLS', is_valid)
     elif modality.id == 'RTC':
         is_valid = opera_rtc.is_valid_rtc(merged_data['mask'], merged['EVENT'])
-        print('RTC', is_valid)
 
     return is_valid
 
 
-def filter_chips(chips):
-    if MODALITY == 'HLS':
+def filter_chips(chips, modality):
+    if modality.id == 'HLS':
         filtered_chips = hls.filter_hls_chips(chips)
-    elif MODALITY == 'RTC':
+    elif modality.id == 'RTC':
         filtered_chips = opera_rtc.filter_rtc_chips(chips)
 
     return filtered_chips
 
 
-def get_img(band_data):
-    if MODALITY == 'HLS':
+def get_img(band_data, modality):
+    if modality.id == 'HLS':
         img = hls.get_hls_img(band_data)
-    elif MODALITY == 'RTC':
+    elif modality.id == 'RTC':
         img = opera_rtc.get_rtc_img(band_data)
 
     return img
 
 
-def data_transform(data):
-    if MODALITY == 'RTC':
+def data_transform(data, modality):
+    if modality.id == 'RTC':
         data = 10 * np.log10(np.clip(data, 1e-10, None))
 
     return data

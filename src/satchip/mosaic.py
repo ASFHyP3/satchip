@@ -1,13 +1,15 @@
 from pathlib import Path
+import shutil
 import datetime
 
 import earthaccess
 import numpy as np
 import rasterio
-from pyproj import Transformer
 from rasterio.crs import CRS
 from rasterio.merge import merge
 from rasterio.warp import calculate_default_transform, reproject
+from rasterio.warp import Resampling, transform_bounds
+from rasterio.transform import from_bounds
 from rasterio.mask import mask
 from shapely.geometry import box
 
@@ -20,31 +22,24 @@ def data_over_swath(swath, modalities: list[Modality], output_path: Path):
     data_paths = {
         "RAW": output_path / "RAW",
         "REPROJECTED": output_path / "REPROJECTED",
+        "MOSAIC": output_path / "MOSAIC"
     }
 
-    for item in output_path.glob('*.tif'):
-        if item.is_dir():
-            continue
-
-        item.unlink()
+    for p in ("MOSAIC", ):
+        shutil.rmtree(data_paths[p], ignore_errors=True)
 
     for p in data_paths.values():
         p.mkdir(parents=True, exist_ok=True)
 
     swathID = f"{int(swath['swathID']):04d}"
 
-    merged = {}
-
+    stacked = {}
     for modality in modalities:
         print(f'Localizing data for {modality.id}.')
 
         bounding_box = swath["buffered_event_background"].bounds
-        # transformer = Transformer.from_crs(32615, 4326, always_xy=True)
-        # minx, miny = transformer.transform(minx, miny)
-        # maxx, maxy = transformer.transform(maxx, maxy)
 
         start_date = swath["ls5hlsDate"] if modality.id == 'HLS' else swath["s1Date"]
-        print(start_date)
 
         results = search_data(bounding_box, start_date, modality)
 
@@ -66,20 +61,23 @@ def data_over_swath(swath, modalities: list[Modality], output_path: Path):
             merged_name = make_merge_name(swathID, start_date, band, modality)
 
             merged_band_path = _merge(
-                band_files, output_file=output_path / merged_name
+                band_files, output_file=data_paths['MOSAIC'] / merged_name
             )
 
-            print(f'Clipping band {band} data to same area')
-            clipped_band_path = _clip_over_swath(merged_band_path, swath)
-            mod_merged[band] = clipped_band_path
+            mod_merged[band] = merged_band_path
 
         print(f'Stacking bands for {modality.id}')
-        stacked_data = _stack_bands(mod_merged, data_bands=modality.stack_bands)
+        stacked_data = _stack_bands(mod_merged, data_bands=modality.stack_bands, stacked_name='BANDS')
+        stacked[modality.id] = stacked_data
 
-        merged[modality.id] = stacked_data
+    print(f'Warp band {band} data to same area')
+    warped = _warp_over_swath(
+        data=stacked,
+        bounding_box_4326=bounding_box,
+        output_dir=output_path,
+    )
 
-    breakpoint()
-    return merged
+    return warped
 
 
 def search_data(bounding_box: tuple, start_date: datetime.datetime, modality: Modality):
@@ -184,13 +182,13 @@ def _merge(band_files: list[Path], output_file: Path) -> Path:
     return output_file
 
 
-def _stack_bands(merged: dict[str, Path], data_bands: tuple[str]) -> None:
+def _stack_bands(merged: dict[str, Path], data_bands: tuple[str], stacked_name: str) -> None:
     with rasterio.open(merged[data_bands[0]]) as src:
         meta = src.meta.copy()
 
     band = data_bands[0]
     meta.update(count=len(data_bands), dtype=np.float32)
-    stacked_file_name = _rename(merged[band], f"{band}.tif", "BANDS.tif")
+    stacked_file_name = _rename(merged[band], f"{band}.tif", f"{stacked_name}.tif")
 
     with rasterio.open(stacked_file_name, "w", **meta) as dst:
         for idx, band in enumerate(data_bands, start=1):
@@ -198,7 +196,7 @@ def _stack_bands(merged: dict[str, Path], data_bands: tuple[str]) -> None:
 
                 dst.write(src.read(1), idx)
 
-    merged["BANDS"] = stacked_file_name
+    merged[stacked_name] = stacked_file_name
     return merged
 
 
@@ -206,22 +204,84 @@ def _rename(path: Path, extension: str, mask_name: str) -> Path:
     return path.parent / path.name.replace(extension, mask_name)
 
 
-def _clip_over_swath(input_path: Path, swath) -> Path:
-    bounding_box = swath["buffered_event_background"].bounds
+def _warp_over_swath(data, bounding_box_4326, output_dir):
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    reference_path = next(iter(next(iter(data.values())).values()))
+    dst_transform, width, height, dst_crs = _build_common_grid(
+        bounding_box_4326, reference_path
+    )
+
+    output = {}
+    for sensor, bands in data.items():
+        output[sensor] = {}
+        for band_name, input_path in bands.items():
+            out_path = output_dir / input_path.name
+            _warp_single(
+                input_path, out_path,
+                dst_transform, width, height, dst_crs,
+                band_name
+            )
+            output[sensor][band_name] = out_path
+
+    return output
+
+
+def _warp_single(input_path, output_path, dst_transform, width, height, dst_crs, band_name):
+    CATEGORICAL_BANDS = {"Fmask", "mask"}
+    resampling = Resampling.nearest if band_name in CATEGORICAL_BANDS else Resampling.bilinear
 
     with rasterio.open(input_path) as src:
-        out_image, out_transform = mask(src, shapes=[box(*bounding_box)], crop=True)
-        out_meta = src.meta.copy()
+        dst_data = np.zeros((src.count, height, width), dtype=src.dtypes[0])
 
+        reproject(
+            source=rasterio.band(src, list(range(1, src.count + 1))),
+            destination=dst_data,
+            src_transform=src.transform,
+            src_crs=src.crs,
+            dst_transform=dst_transform,
+            dst_crs=dst_crs,
+            resampling=resampling,
+            dst_nodata=src.nodata,
+        )
+
+        out_meta = src.meta.copy()
         out_meta.update({
-            "driver": "GTiff",
-            "height": out_image.shape[1],
-            "width": out_image.shape[2],
-            "transform": out_transform,
-            "crs": src.crs
+            "driver":    "GTiff",
+            "height":    height,
+            "width":     width,
+            "transform": dst_transform,
+            "crs":       dst_crs,
         })
 
-    with rasterio.open(input_path, "w", **out_meta) as dest:
-        dest.write(out_image)
+        with rasterio.open(output_path, "w", **out_meta) as dest:
+            dest.write(dst_data)
 
-    return input_path
+    return output_path
+
+
+def _build_common_grid(bounding_box_4326, reference_path):
+    dst_crs = CRS.from_epsg(4326)
+    minx, miny, maxx, maxy = bounding_box_4326
+
+    with rasterio.open(reference_path) as ref:
+        bounds_4326 = transform_bounds(ref.crs, dst_crs, *ref.bounds, densify_pts=21)
+        ref_width = ref.width
+        ref_height = ref.height
+
+    ref_bbox_width  = bounds_4326[2] - bounds_4326[0]
+    ref_bbox_height = bounds_4326[3] - bounds_4326[1]
+    res_x = ref_bbox_width  / ref_width
+    res_y = ref_bbox_height / ref_height
+
+    minx = np.floor(minx / res_x) * res_x
+    miny = np.floor(miny / res_y) * res_y
+    maxx = np.ceil(maxx  / res_x) * res_x
+    maxy = np.ceil(maxy  / res_y) * res_y
+
+    width  = int(round((maxx - minx) / res_x))
+    height = int(round((maxy - miny) / res_y))
+    dst_transform = from_bounds(minx, miny, maxx, maxy, width, height)
+
+    return dst_transform, width, height, dst_crs
