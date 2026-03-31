@@ -9,6 +9,8 @@ from satchip import models
 
 
 def merge_modality(modality_files: list[Path], modality: models.Modality, event: models.Event, output_path: Path, selected_bands: list[models.Band] | None = None):
+    output_path.mkdir(exist_ok=True, parents=True)
+
     if len(modality_files) == 0:
         print(f"Warning: no data for {event.name}")
         return []

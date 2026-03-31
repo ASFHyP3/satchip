@@ -19,3 +19,7 @@ def test_merge_s2_modality(s2_local_files, s2_event, tmp_path):
     result = merge_modality.merge_modality(s2_local_files, models.HLS_S30, s2_event, tmp_path)
 
     assert result
+
+    result = merge_modality.merge_modality(s2_local_files, models.HLS_S30, s2_event, tmp_path / 'merged')
+
+    assert result
