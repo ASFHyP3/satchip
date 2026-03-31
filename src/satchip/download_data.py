@@ -27,7 +27,7 @@ def _search_data(event: models.Event, modality: models.Modality) -> list[earthac
     start_date = event.date
     final_date = start_date + timedelta(days=1)
 
-    collection_id = modality.collection
+    collection_id = modality['collection']
 
     results = earthaccess.search_data(
         short_name=[collection_id],
