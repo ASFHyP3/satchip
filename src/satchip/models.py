@@ -57,7 +57,7 @@ MODALITIES: dict[str, Modality] = {
             Band("B8A", "NIR Narrow", "N"),
             Band("B11", "SWIR 1", "SW1"),
             Band("B12", "SWIR 2", "SW2"),
-            Band("Fmask", "Cloud Mask", "Fmask"),
+            Band("Fmask", "Cloud Mask", "fmask"),
         )
     },
     "HLS_L30": {
@@ -70,7 +70,7 @@ MODALITIES: dict[str, Modality] = {
             Band("B05", "NIR Narrow", "N"),
             Band("B06", "SWIR 1", "SW1"),
             Band("B07", "SWIR 2", "SW2"),
-            Band("Fmask", "Cloud Mask", "Fmask"),
+            Band("Fmask", "Cloud Mask", "fmask"),
         )
     }
 }

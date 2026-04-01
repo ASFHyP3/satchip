@@ -10,8 +10,6 @@ from rasterio.merge import merge
 from rasterio.warp import calculate_default_transform, reproject
 from rasterio.warp import Resampling, transform_bounds
 from rasterio.transform import from_bounds
-from rasterio.mask import mask
-from shapely.geometry import box
 
 from modality import Modality
 import hls

@@ -1,5 +1,6 @@
-from pathlib import Path
 import datetime
+from collections.abc import Iterable
+from pathlib import Path
 
 import numpy as np
 import rasterio
@@ -8,17 +9,17 @@ from rasterio.merge import merge
 from satchip import models
 
 
-def merge_modality(modality_files: list[Path], modality: models.Modality, event: models.Event, output_path: Path, selected_bands: list[models.Band] | None = None):
+def merge_modality(modality_files: list[Path], modality: models.Modality, event: models.Event, output_path: Path, selected_bands: list[models.Band] | None = None) -> list[Path]:
     output_path.mkdir(exist_ok=True, parents=True)
 
     if len(modality_files) == 0:
         print(f"Warning: no data for {event.name}")
         return []
 
-    merged = {}
-
     if selected_bands is None:
         selected_bands = modality['bands']
+
+    merged = []
 
     for band in selected_bands:
         band_files = [f for f in modality_files if band.id in models.band_id_from_filename(f.name, modality['id'])]
@@ -29,7 +30,7 @@ def merge_modality(modality_files: list[Path], modality: models.Modality, event:
             band_files, output_file=output_path / merged_name
         )
 
-        merged[band] = merged_band_path
+        merged.append(merged_band_path)
 
     return merged
 
@@ -71,3 +72,22 @@ def _merge(band_files: list[Path], output_file: Path) -> Path:
             ds.close()
 
     return output_file
+
+
+def stack_bands(band_files: Iterable[Path], stacked_filename: Path) -> Path:
+    with rasterio.open(band_files[0]) as src:
+        meta = src.meta.copy()
+
+    meta.update(count=len(band_files), dtype=np.float32)
+
+    with rasterio.open(stacked_filename, "w", **meta) as dst:
+        for idx, band_file in enumerate(band_files, start=1):
+            with rasterio.open(band_file) as src:
+
+                dst.write(src.read(1), idx)
+
+    return stacked_filename
+
+
+def _rename(path: Path, extension: str, mask_name: str) -> Path:
+    return path.parent / path.name.replace(extension, mask_name)
