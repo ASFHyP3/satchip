@@ -75,6 +75,8 @@ def _merge(band_files: list[Path], output_file: Path) -> Path:
 
 
 def stack_bands(band_files: Iterable[Path], stacked_filename: Path) -> Path:
+    stacked_filename.parent.mkdir(exist_ok=True, parents=True)
+
     with rasterio.open(band_files[0]) as src:
         meta = src.meta.copy()
 

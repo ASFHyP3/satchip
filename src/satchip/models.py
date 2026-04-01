@@ -12,14 +12,6 @@ class Band(NamedTuple):
     shortname: str
 
 
-def bands_by_shortname(bands: tuple[Band, ...]) -> dict[str, Band]:
-    return {band.shortname: band for band in bands}
-
-
-def bands_by_id(bands: tuple[Band, ...]) -> dict[str, Band]:
-    return {band.id: band for band in bands}
-
-
 class Modality(TypedDict):
     id: str
     bands: Tuple[Band, ...]
@@ -35,6 +27,14 @@ class Event:
 
 class ModalityError(Exception):
     pass
+
+
+def bands_by_shortname(bands: tuple[Band, ...]) -> dict[str, Band]:
+    return {band.shortname: band for band in bands}
+
+
+def bands_by_id(bands: tuple[Band, ...]) -> dict[str, Band]:
+    return {band.id: band for band in bands}
 
 
 MODALITIES: dict[str, Modality] = {
@@ -57,7 +57,7 @@ MODALITIES: dict[str, Modality] = {
             Band("B8A", "NIR Narrow", "N"),
             Band("B11", "SWIR 1", "SW1"),
             Band("B12", "SWIR 2", "SW2"),
-            Band("Fmask", "Cloud Mask", "fmask"),
+            Band("Fmask", "Cloud Mask", "Fmask"),
         )
     },
     "HLS_L30": {
