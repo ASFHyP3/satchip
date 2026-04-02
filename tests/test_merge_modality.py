@@ -1,4 +1,4 @@
-from satchip import merge_modality, models
+from satchip import merge_modality, models, generate_labels
 import rasterio
 
 
@@ -42,6 +42,27 @@ def test_stack_bands(s2_local_files, s2_event, tmp_path):
         num_bands = ds.count
 
     assert num_bands == len(bands)
+
+
+def test_warp_to_reference(s2_local_files, s2_event, tmp_path):
+    merged = merge_modality.merge_modality(s2_local_files, models.HLS_S30, s2_event, tmp_path / 'merged')
+    reprojected = merge_modality.reproject_files(merged, tmp_path / 'wgs84')
+
+    bands = reprojected[:-1]
+    fmask = reprojected[-1]
+
+    stacked = merge_modality.stack_bands(bands, stacked_filename=tmp_path / 'stacked.tif')
+    label = generate_labels.binary_mask_from_template(stacked, s2_event, tmp_path)
+
+    outputs = merge_modality.warp_to_reference(label, [stacked, fmask], tmp_path / 'warped', s2_event.wgs84_geometry.bounds)
+
+    shapes = set()
+    for output in outputs:
+        with rasterio.open(output) as ds:
+            shapes.add(ds.shape)
+
+    assert len(outputs) == 3
+    assert len(shapes) == 1
 
 
 def test_reproject_files(s2_local_files, s2_event, tmp_path):

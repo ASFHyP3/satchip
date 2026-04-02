@@ -5,8 +5,10 @@ from pathlib import Path
 import numpy as np
 import rasterio
 from rasterio.crs import CRS
+from rasterio.warp import Resampling, transform_bounds
 from rasterio.warp import calculate_default_transform, reproject
 from rasterio.merge import merge
+from rasterio.transform import from_bounds
 
 from satchip import models
 
@@ -142,5 +144,82 @@ def reproject_file(local_file: Path, reprojected_file: Path, epsg=4326) -> None:
                     dst_crs=dst_crs,
                 )
 
-def _rename(path: Path, extension: str, mask_name: str) -> Path:
-    return path.parent / path.name.replace(extension, mask_name)
+
+def warp_to_reference(reference_path: Path, data_files: Iterable[Path], output_dir: Path, bounding_box_4326: tuple(float, float, float, float)):
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    dst_transform, width, height, dst_crs = _build_common_grid(
+        bounding_box_4326, reference_path
+    )
+
+    files = (reference_path, *data_files)
+
+    output = []
+    for data_file in files:
+        out_path = output_dir / data_file.name
+
+        _warp_single(
+            data_file, out_path,
+            dst_transform, width, height, dst_crs,
+        )
+
+        output.append(out_path)
+
+    return output
+
+
+def _warp_single(input_path, output_path, dst_transform, width, height, dst_crs, resampling=Resampling.bilinear):
+    with rasterio.open(input_path) as src:
+        dst_data = np.zeros((src.count, height, width), dtype=src.dtypes[0])
+
+        reproject(
+            source=rasterio.band(src, list(range(1, src.count + 1))),
+            destination=dst_data,
+            src_transform=src.transform,
+            src_crs=src.crs,
+            dst_transform=dst_transform,
+            dst_crs=dst_crs,
+            resampling=resampling,
+            dst_nodata=src.nodata,
+        )
+
+        out_meta = src.meta.copy()
+        out_meta.update({
+            "driver":    "GTiff",
+            "height":    height,
+            "width":     width,
+            "transform": dst_transform,
+            "crs":       dst_crs,
+        })
+
+        with rasterio.open(output_path, "w", **out_meta) as dest:
+            dest.write(dst_data)
+
+    return output_path
+
+
+def _build_common_grid(bounding_box_4326, reference_path):
+    dst_crs = CRS.from_epsg(4326)
+    minx, miny, maxx, maxy = bounding_box_4326
+
+    with rasterio.open(reference_path) as ref:
+        bounds_4326 = transform_bounds(ref.crs, dst_crs, *ref.bounds, densify_pts=21)
+        ref_width = ref.width
+        ref_height = ref.height
+
+    ref_bbox_width = bounds_4326[2] - bounds_4326[0]
+    ref_bbox_height = bounds_4326[3] - bounds_4326[1]
+    res_x = ref_bbox_width / ref_width
+    res_y = ref_bbox_height / ref_height
+
+    minx = np.floor(minx / res_x) * res_x
+    miny = np.floor(miny / res_y) * res_y
+    maxx = np.ceil(maxx / res_x) * res_x
+    maxy = np.ceil(maxy / res_y) * res_y
+
+    width = int(round((maxx - minx) / res_x))
+    height = int(round((maxy - miny) / res_y))
+
+    dst_transform = from_bounds(minx, miny, maxx, maxy, width, height)
+
+    return dst_transform, width, height, dst_crs
