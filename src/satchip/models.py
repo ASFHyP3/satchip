@@ -90,9 +90,11 @@ HLS_L30_BANDS = bands_by_shortname(MODALITIES['HLS_L30']['bands'])
 
 
 def band_id_from_filename(filename: str, modality_id: str) -> Band | None:
-    if 'HLS' in modality_id:
+    if 'HLS_L30' in modality_id:
         sensor, band = band_from_hls_filename(filename)
-    elif 'RTC' in modality_id:
+    elif 'HLS_S30' in modality_id:
+        sensor, band = band_from_hls_filename(filename)
+    elif 'OPERA_RTC' in modality_id:
         sensor, band = band_from_rtc_filename(filename)
     else:
         raise ModalityError(f'Modality not found {modality_id}, must be ({MODALITY_IDS})')

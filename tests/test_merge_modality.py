@@ -42,3 +42,14 @@ def test_stack_bands(s2_local_files, s2_event, tmp_path):
         num_bands = ds.count
 
     assert num_bands == len(bands)
+
+
+def test_reproject_files(s2_local_files, s2_event, tmp_path):
+    reprojected_files = merge_modality.reproject_files(s2_local_files, tmp_path / 'wgs84')
+
+    assert len(reprojected_files) == len(s2_local_files)
+
+    for f in reprojected_files:
+        with rasterio.open(f) as ds:
+            epsg_code = ds.profile['crs'].to_epsg()
+            assert epsg_code == 4326
