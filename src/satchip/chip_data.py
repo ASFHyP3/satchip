@@ -27,38 +27,41 @@ def make_grid_from_reference(reference: Path, chip_size = 256) -> list[models.Gr
     return grid
 
 
-def chip_data(grid: list[models.GridCell], layers: Iterable[Path], output_path: Path):
-    chips = {}
+def chip_data(grid: list[models.GridCell], layer: Path, output_path: Path) -> list[models.Chips]:
+    output_path.mkdir(exist_ok=True, parents=True)
 
-    for layer in layers:
-        with rasterio.open(layer) as src:
-            for tile_id, bounds in grid:
-                window = src.window(*bounds)
-                window = Window(
-                    round(window.col_off),
-                    round(window.row_off),
-                    round(window.width),
-                    round(window.height),
-                )
+    chips = []
 
-                data = src.read(window=window)
+    with rasterio.open(layer) as src:
+        for grid_cell in grid:
+            window = src.window(*grid_cell.bounds)
+            window = Window(
+                round(window.col_off),
+                round(window.row_off),
+                round(window.width),
+                round(window.height),
+            )
 
-                chip_meta = src.meta.copy()
-                chip_meta.update(
-                    {
-                        "width": window.width,
-                        "height": window.height,
-                        "transform": src.window_transform(window),
-                    }
-                )
+            data = src.read(window=window)
 
-                chip_name = f"{tile_id}.{layer.name}"
-                chip_path = output_path / chip_name
+            chip_meta = src.meta.copy()
+            chip_meta.update(
+                {
+                    "width": window.width,
+                    "height": window.height,
+                    "transform": src.window_transform(window),
+                }
+            )
 
-                with rasterio.open(chip_path, "w", **chip_meta) as dst:
-                    dst.write(data)
+            chip_name = f"{grid_cell.id}.{layer.name}"
+            chip_path = output_path / chip_name
 
-                chips[tile_id] = chip_path
+            with rasterio.open(chip_path, "w", **chip_meta) as dst:
+                dst.write(data)
+
+            chip = models.Chip(grid_cell.id, chip_path)
+
+            chips.append(chip)
 
     return chips
 

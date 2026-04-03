@@ -56,9 +56,7 @@ class Layer:
 @dataclass(frozen=True)
 class Chip:
     id: str
-    modality: Modality
     path: Path
-
 
 
 class ModalityError(Exception):
