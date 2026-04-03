@@ -1,8 +1,10 @@
+from pathlib import Path
 from datetime import datetime
 from dataclasses import dataclass
 from typing import TypedDict, NamedTuple
 from typing import Tuple
 
+from rasterio.coords import BoundingBox
 import shapely
 import pyproj
 
@@ -36,6 +38,27 @@ class Event:
 
         to_wgs84 = pyproj.Transformer.from_crs(32615, 4326, always_xy=True)
         return shapely.ops.transform(to_wgs84.transform, buffered)
+
+
+@dataclass(frozen=True)
+class GridCell:
+    id: str
+    bounds: BoundingBox
+
+
+@dataclass(frozen=True)
+class Layer:
+    name: str
+    modality: Modality
+    path: Path
+
+
+@dataclass(frozen=True)
+class Chip:
+    id: str
+    modality: Modality
+    path: Path
+
 
 
 class ModalityError(Exception):

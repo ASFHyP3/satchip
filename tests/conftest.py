@@ -39,6 +39,17 @@ def pristine_gdf(tmp_path):
 
 
 @pytest.fixture(scope="session")
+def warped_event_files():
+    warped_base = DATA_PATH / "warped"
+
+    return [
+        warped_base / '102a.HLS_S30.2019-07-09.Fmask.tif',
+        warped_base / '102a.MASK.tif',
+        warped_base / '102a.stacked.tif',
+    ]
+
+
+@pytest.fixture(scope="session")
 def s2_local_files(s2_event):
     download_path = DATA_PATH / "raw"
     print('Downloading test data...')
