@@ -4,6 +4,7 @@ from typing import TypedDict, NamedTuple
 from typing import Tuple
 
 import shapely
+import pyproj
 
 
 class Band(NamedTuple):
@@ -23,6 +24,18 @@ class Event:
     name: str
     date: datetime
     wgs84_geometry: shapely.geometry.Polygon
+    buffer_m: int = 0
+
+    def buffered_geometry(self) -> shapely.geometry.Polygon:
+        if self.buffer_m == 0:
+            return self.wgs84_geometry
+
+        to_utm = pyproj.Transformer.from_crs(4326, 32615, always_xy=True)
+        projected = shapely.ops.transform(to_utm.transform, self.wgs84_geometry)
+        buffered = projected.buffer(self.buffer_m)
+
+        to_wgs84 = pyproj.Transformer.from_crs(32615, 4326, always_xy=True)
+        return shapely.ops.transform(to_wgs84.transform, buffered)
 
 
 class ModalityError(Exception):

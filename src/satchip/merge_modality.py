@@ -8,7 +8,7 @@ from rasterio.crs import CRS
 from rasterio.warp import Resampling, transform_bounds
 from rasterio.warp import calculate_default_transform, reproject
 from rasterio.merge import merge
-from rasterio.transform import from_bounds
+from rasterio.transform import from_bounds, Affine
 
 from satchip import models
 
@@ -145,11 +145,11 @@ def reproject_file(local_file: Path, reprojected_file: Path, epsg=4326) -> None:
                 )
 
 
-def warp_to_reference(reference_path: Path, data_files: Iterable[Path], output_dir: Path, bounding_box_4326: tuple(float, float, float, float)):
+def warp_to_reference(reference_path: Path, data_files: Iterable[Path], output_dir: Path, bounding_box_wgs84: tuple(float, float, float, float)) -> list[Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     dst_transform, width, height, dst_crs = _build_common_grid(
-        bounding_box_4326, reference_path
+        bounding_box_wgs84, reference_path
     )
 
     files = (reference_path, *data_files)
@@ -168,7 +168,7 @@ def warp_to_reference(reference_path: Path, data_files: Iterable[Path], output_d
     return output
 
 
-def _warp_single(input_path, output_path, dst_transform, width, height, dst_crs, resampling=Resampling.bilinear):
+def _warp_single(input_path, output_path, dst_transform, width, height, dst_crs, resampling=Resampling.bilinear) -> Path:
     with rasterio.open(input_path) as src:
         dst_data = np.zeros((src.count, height, width), dtype=src.dtypes[0])
 
@@ -198,7 +198,7 @@ def _warp_single(input_path, output_path, dst_transform, width, height, dst_crs,
     return output_path
 
 
-def _build_common_grid(bounding_box_4326, reference_path):
+def _build_common_grid(bounding_box_4326: tuple(float, float, float, float), reference_path: Path) -> tuple[Affine, int, int, CRS]:
     dst_crs = CRS.from_epsg(4326)
     minx, miny, maxx, maxy = bounding_box_4326
 

@@ -54,7 +54,7 @@ def test_warp_to_reference(s2_local_files, s2_event, tmp_path):
     stacked = merge_modality.stack_bands(bands, stacked_filename=tmp_path / 'stacked.tif')
     label = generate_labels.binary_mask_from_template(stacked, s2_event, tmp_path)
 
-    outputs = merge_modality.warp_to_reference(label, [stacked, fmask], tmp_path / 'warped', s2_event.wgs84_geometry.bounds)
+    outputs = merge_modality.warp_to_reference(label, [stacked, fmask], tmp_path / 'warped', s2_event.buffered_geometry().bounds)
 
     shapes = set()
     for output in outputs:

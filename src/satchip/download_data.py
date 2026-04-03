@@ -32,7 +32,7 @@ def _search_data(event: models.Event, modality: models.Modality) -> list[earthac
     results = earthaccess.search_data(
         short_name=[collection_id],
         temporal=(start_date.strftime("%Y-%m-%d"), final_date.strftime("%Y-%m-%d")),
-        bounding_box=event.wgs84_geometry.bounds,
+        bounding_box=event.buffered_geometry().bounds,
     )
 
     return results
