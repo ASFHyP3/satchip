@@ -59,6 +59,15 @@ class Chip:
     path: Path
 
 
+@dataclass(frozen=True)
+class ChipStack:
+    id: str
+    data: Path
+    validation_mask: Path
+    label: Path
+    modality: Modality
+
+
 class ModalityError(Exception):
     pass
 

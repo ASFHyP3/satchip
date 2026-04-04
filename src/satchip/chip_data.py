@@ -60,48 +60,68 @@ def chip_data(grid: list[models.GridCell], layer: Path, output_path: Path) -> li
                 dst.write(data)
 
             chip = models.Chip(grid_cell.id, chip_path)
-
             chips.append(chip)
 
     return chips
 
 
-def filter_chips(chips, modality):
-    if modality.id == 'HLS':
-        filtered_chips = filter_hls_chips(chips)
-    elif modality.id == 'RTC':
-        filtered_chips = filter_rtc_chips(chips)
+def make_chip_stacks(data_chips: list[models.Chip], validation_mask_chips: list[models.Chip], label_chips: list[models.Chip], modality: models.Modality) -> list[models.ChipStack]:
+    chip_stacks = []
 
-    return filtered_chips
+    for data, mask, label in zip(
+        sorted(data_chips, key=lambda c: c.id),
+        sorted(validation_mask_chips, key=lambda c: c.id),
+        sorted(label_chips, key=lambda c: c.id),
+    ):
+        chip_stack = models.ChipStack(
+            id=data.id,
+            data=data.path,
+            validation_mask=mask.path,
+            label=label.path,
+            modality=modality,
+        )
+
+        chip_stacks.append(chip_stack)
+
+    return chip_stacks
 
 
-def filter_hls_chips(chips: dict[str, dict]) -> list[dict]:
+def filter_chips(chip_stacks: list[models.ChipStack]) -> list[models.ChipStack]:
     good_chips = []
 
-    for tile_id, chip in chips.items():
-        with rasterio.open(chip["Fmask"]) as ds:
-            qc = clear_px_Fmask(ds.read(1))
+    for chip_stack in chip_stacks:
+        if 'HLS' in chip_stack.modality['id']:
+            is_good_chip = is_good_hls_chip(chip_stack)
+        elif 'RTC' in chip_stack.modality['id']:
+            is_good_chip = is_good_rtc_chip(chip_stack)
 
-        with rasterio.open(chip["EVENT"]) as ds:
-            event = ds.read(1)
-
-        ny, nx = qc.shape
-        n_px = 1.0 * ny * nx
-
-        # cloud-free pixels (0 clear, 1 cloud, 255 nodata)
-        n_cf = len(np.where(qc == 0)[0])
-        pct_cf = 100.0 * (n_cf / n_px)
-
-        # event pixels
-        n_ev = len(np.where(event > 0)[0])
-
-        # pct of chip in event
-        pct_ev = 100.0 * (n_ev / n_px) if n_ev > 0 else 0
-
-        if pct_cf > 95 and pct_ev > 1:
-            good_chips.append(chip)
+        if is_good_chip:
+            good_chips.append(chip_stack)
 
     return good_chips
+
+
+def is_good_hls_chip(chip_stack: models.ChipStack) -> bool:
+    with rasterio.open(chip_stack.validation_mask) as ds:
+        qc = clear_px_Fmask(ds.read(1))
+
+    with rasterio.open(chip_stack.label) as ds:
+        event = ds.read(1)
+
+    ny, nx = qc.shape
+    n_px = 1.0 * ny * nx
+
+    # cloud-free pixels (0 clear, 1 cloud, 255 nodata)
+    n_cf = len(np.where(qc == 0)[0])
+    pct_cf = 100.0 * (n_cf / n_px)
+
+    # event pixels
+    n_ev = len(np.where(event > 0)[0])
+
+    # pct of chip in event
+    pct_ev = 100.0 * (n_ev / n_px) if n_ev > 0 else 0
+
+    return pct_cf > 95 and pct_ev > 1
 
 
 def bytescale(arr, cmin=0, cmax=1, low=0, high=255):
@@ -132,25 +152,19 @@ def clear_px_Fmask(Fmask: np.ndarray) -> np.ndarray:
     return cloudmask
 
 
-def filter_rtc_chips(chips: dict[str, dict]) -> list[dict]:
-    good_chips = []
+def is_good_rtc_chip(chip_stack: models.ChipStack) -> bool:
+    with rasterio.open(chip_stack.data) as ds:
+        rtc_data = ds.read()
 
-    for tile_id, chip in chips.items():
-        with rasterio.open(chip["BANDS"]) as ds:
-            rtc_data = ds.read()
+    with rasterio.open(chip_stack.label) as ds:
+        event_mask = ds.read(1)
 
-        with rasterio.open(chip["EVENT"]) as ds:
-            event_mask = ds.read(1)
+    has_nan_pixels = np.isnan(rtc_data).sum() > 0
 
-        has_nan_pixels = np.isnan(rtc_data).sum() > 0
+    num_pixels = event_mask.size
+    num_event_pixels = np.count_nonzero(event_mask > 0)
 
-        num_pixels = event_mask.size
-        num_event_pixels = np.count_nonzero(event_mask > 0)
+    pct_pixels_over_event = 100.0 * (num_event_pixels / num_pixels)
+    data_overlaps_event = pct_pixels_over_event > 1
 
-        pct_pixels_over_event = 100.0 * (num_event_pixels / num_pixels)
-        data_overlaps_event = pct_pixels_over_event > 1
-
-        if not has_nan_pixels and data_overlaps_event:
-            good_chips.append(chip)
-
-    return good_chips
+    return not has_nan_pixels and data_overlaps_event
