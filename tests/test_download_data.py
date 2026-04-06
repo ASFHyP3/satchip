@@ -1,7 +1,6 @@
 import pytest
 
-from satchip import models
-from satchip import download_data
+from satchip import download_data, models
 
 
 @pytest.mark.download

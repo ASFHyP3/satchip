@@ -1,12 +1,11 @@
-from pathlib import Path
-from datetime import datetime
 from dataclasses import dataclass
-from typing import TypedDict, NamedTuple
-from typing import Tuple
+from datetime import datetime
+from pathlib import Path
+from typing import NamedTuple, TypedDict
 
-from rasterio.coords import BoundingBox
-import shapely
 import pyproj
+import shapely
+from rasterio.coords import BoundingBox
 
 
 class Band(NamedTuple):
@@ -17,7 +16,7 @@ class Band(NamedTuple):
 
 class Modality(TypedDict):
     id: str
-    bands: Tuple[Band, ...]
+    bands: tuple[Band, ...]
     collection: str
 
 
@@ -81,41 +80,41 @@ def bands_by_id(bands: tuple[Band, ...]) -> dict[str, Band]:
 
 
 MODALITIES: dict[str, Modality] = {
-    "OPERA_RTC": {
-        "id": "OPERA_RTC",
-        "collection": "OPERA_L2_RTC-S1_V1",
-        "bands": (
-            Band("VV", "VV", "VV"),
-            Band("VH", "VH", "VH"),
-            Band("mask", "Validitiy Mask", "mask"),
-        )
+    'OPERA_RTC': {
+        'id': 'OPERA_RTC',
+        'collection': 'OPERA_L2_RTC-S1_V1',
+        'bands': (
+            Band('VV', 'VV', 'VV'),
+            Band('VH', 'VH', 'VH'),
+            Band('mask', 'Validitiy Mask', 'mask'),
+        ),
     },
-    "HLS_S30": {
-        "id": "HLS_S30",
-        "collection": "HLSS30",
-        "bands": (
-            Band("B02", "Blue", "B"),
-            Band("B03", "Green", "G"),
-            Band("B04", "Red", "R"),
-            Band("B8A", "NIR Narrow", "N"),
-            Band("B11", "SWIR 1", "SW1"),
-            Band("B12", "SWIR 2", "SW2"),
-            Band("Fmask", "Cloud Mask", "Fmask"),
-        )
+    'HLS_S30': {
+        'id': 'HLS_S30',
+        'collection': 'HLSS30',
+        'bands': (
+            Band('B02', 'Blue', 'B'),
+            Band('B03', 'Green', 'G'),
+            Band('B04', 'Red', 'R'),
+            Band('B8A', 'NIR Narrow', 'N'),
+            Band('B11', 'SWIR 1', 'SW1'),
+            Band('B12', 'SWIR 2', 'SW2'),
+            Band('Fmask', 'Cloud Mask', 'Fmask'),
+        ),
     },
-    "HLS_L30": {
-        "id": "HLS_L30",
-        "collection": "HLSL30",
-        "bands": (
-            Band("B02", "Blue", "B"),
-            Band("B03", "Green", "G"),
-            Band("B04", "Red", "R"),
-            Band("B05", "NIR Narrow", "N"),
-            Band("B06", "SWIR 1", "SW1"),
-            Band("B07", "SWIR 2", "SW2"),
-            Band("Fmask", "Cloud Mask", "fmask"),
-        )
-    }
+    'HLS_L30': {
+        'id': 'HLS_L30',
+        'collection': 'HLSL30',
+        'bands': (
+            Band('B02', 'Blue', 'B'),
+            Band('B03', 'Green', 'G'),
+            Band('B04', 'Red', 'R'),
+            Band('B05', 'NIR Narrow', 'N'),
+            Band('B06', 'SWIR 1', 'SW1'),
+            Band('B07', 'SWIR 2', 'SW2'),
+            Band('Fmask', 'Cloud Mask', 'fmask'),
+        ),
+    },
 }
 
 MODALITY_IDS = list(MODALITIES.keys())

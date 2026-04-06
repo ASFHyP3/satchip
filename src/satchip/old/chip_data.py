@@ -7,15 +7,15 @@ from pathlib import Path
 import earthaccess
 import numpy as np
 import xarray as xr
-from shapely.geometry import box
-from tqdm import tqdm
-
-from satchip import utils
 from satchip.chip_hls import get_hls_data
 from satchip.chip_hyp3s1rtc import get_rtc_paths_for_chips, get_s1rtc_chip_data
 from satchip.chip_operas1rtc import get_operartc_data
 from satchip.chip_sentinel2 import get_s2l2a_data
 from satchip.terra_mind_grid import TerraMindChip, TerraMindGrid
+from shapely.geometry import box
+from tqdm import tqdm
+
+from satchip import utils
 
 
 def fill_missing_times(data_chip: xr.DataArray, times: np.ndarray) -> xr.DataArray:

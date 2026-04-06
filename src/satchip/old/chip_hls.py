@@ -8,11 +8,11 @@ import rioxarray
 import shapely
 import xarray as xr
 from earthaccess.results import DataGranule
+from satchip.chip_xr_base import create_dataset_chip, create_template_da
+from satchip.terra_mind_grid import TerraMindChip
 from shapely.geometry import Polygon
 
 from satchip import utils
-from satchip.chip_xr_base import create_dataset_chip, create_template_da
-from satchip.terra_mind_grid import TerraMindChip
 
 
 earthaccess.login()

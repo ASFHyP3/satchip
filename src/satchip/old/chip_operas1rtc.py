@@ -8,11 +8,11 @@ import shapely
 import xarray as xr
 from earthaccess.results import DataGranule
 from osgeo import gdal
-
-from satchip import utils
 from satchip.chip_hls import get_geometry, get_product_id
 from satchip.chip_xr_base import create_dataset_chip, create_template_da
 from satchip.terra_mind_grid import TerraMindChip
+
+from satchip import utils
 
 
 gdal.UseExceptions()

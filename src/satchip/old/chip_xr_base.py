@@ -3,9 +3,9 @@ from collections.abc import Sequence
 
 import numpy as np
 import xarray as xr
+from satchip.terra_mind_grid import TerraMindChip
 
 import satchip
-from satchip.terra_mind_grid import TerraMindChip
 
 
 def _check_spec(dataset: xr.Dataset) -> None:

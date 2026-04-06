@@ -1,18 +1,18 @@
-from datetime import timedelta, datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import earthaccess
-from earthaccess.results import DataGranule
 import numpy as np
 import rasterio
+from earthaccess.results import DataGranule
 
 
 def search_rtc_data(start_date: datetime, bounding_box: tuple[float, float, float, float]) -> list[DataGranule]:
     final_date = start_date + timedelta(days=1)
 
     results = earthaccess.search_data(
-        short_name=["OPERA_L2_RTC-S1_V1"],
-        temporal=(start_date.strftime("%Y-%m-%d"), final_date.strftime("%Y-%m-%d")),
+        short_name=['OPERA_L2_RTC-S1_V1'],
+        temporal=(start_date.strftime('%Y-%m-%d'), final_date.strftime('%Y-%m-%d')),
         bounding_box=bounding_box,
     )
 
@@ -34,12 +34,12 @@ def make_merged_rtc_name(template_filename: str) -> str:
     """
 
     # ['1442.OPERA', 'L2', 'RTC-S1', 'T063-133415-IW2', '20170620T001327Z', '20250925T045340Z', 'S1A', '30', 'v1.0', 'VV.tif']
-    name_parts = template_filename.split("_")
+    name_parts = template_filename.split('_')
 
     name_parts.pop(5)  # Remove Product Generation Time
     name_parts.pop(3)  # Remove Burst ID
 
-    return "_".join(name_parts)
+    return '_'.join(name_parts)
 
 
 def is_valid_rtc(mask_path: Path, label_path: Path) -> bool:
@@ -57,7 +57,7 @@ def is_valid_rtc(mask_path: Path, label_path: Path) -> bool:
     valid_event_pixels = (is_event_pixel & is_valid_pixel).sum()
 
     pct_valid_data = 100.0 * valid_event_pixels / total_event_pixels
-    print(f"Percent of the event with valid data: {pct_valid_data:.1f}%")
+    print(f'Percent of the event with valid data: {pct_valid_data:.1f}%')
 
     return pct_valid_data > 50.0
 
@@ -66,10 +66,10 @@ def filter_rtc_chips(chips: dict[str, dict]) -> list[dict]:
     good_chips = []
 
     for tile_id, chip in chips.items():
-        with rasterio.open(chip["BANDS"]) as ds:
+        with rasterio.open(chip['BANDS']) as ds:
             rtc_data = ds.read()
 
-        with rasterio.open(chip["EVENT"]) as ds:
+        with rasterio.open(chip['EVENT']) as ds:
             event_mask = ds.read(1)
 
         has_nan_pixels = np.isnan(rtc_data).sum() > 0
@@ -86,9 +86,7 @@ def filter_rtc_chips(chips: dict[str, dict]) -> list[dict]:
     return good_chips
 
 
-def normalize_image_array(
-    input_array: np.ndarray, vmin: float, vmax: float
-) -> np.ndarray:
+def normalize_image_array(input_array: np.ndarray, vmin: float, vmax: float) -> np.ndarray:
     input_array = input_array.astype(float)
     scaled_array = (input_array - vmin) / (vmax - vmin)
     scaled_array[np.isnan(input_array)] = 0

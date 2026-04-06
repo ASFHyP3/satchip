@@ -3,8 +3,8 @@ from itertools import product
 import numpy as np
 import pyproj
 from rasterio import Affine
-
 from satchip.major_tom_grid import MajorTomGrid
+
 from satchip.utils import get_epsg4326_bbox, get_epsg4326_point
 
 

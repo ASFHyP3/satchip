@@ -16,9 +16,7 @@ def download_data(event: models.Event, modality: models.Modality, download_path:
     if not results:
         return []
 
-    local_files = earthaccess.download(
-        results, local_path=download_path, show_progress=True
-    )
+    local_files = earthaccess.download(results, local_path=download_path, show_progress=True)
 
     return local_files
 
@@ -31,7 +29,7 @@ def _search_data(event: models.Event, modality: models.Modality) -> list[earthac
 
     results = earthaccess.search_data(
         short_name=[collection_id],
-        temporal=(start_date.strftime("%Y-%m-%d"), final_date.strftime("%Y-%m-%d")),
+        temporal=(start_date.strftime('%Y-%m-%d'), final_date.strftime('%Y-%m-%d')),
         bounding_box=event.buffered_geometry().bounds,
     )
 

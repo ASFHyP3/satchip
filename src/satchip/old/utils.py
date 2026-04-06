@@ -91,12 +91,9 @@ R = TypeVar('R')
 
 
 def retry_on_connection_error(
-    max_retries: int = 3,
-    backoff_factor: float = 1
+    max_retries: int = 3, backoff_factor: float = 1
 ) -> Callable[[Callable[P, R]], Callable[P, R]]:
-
     def decorator(func: Callable[P, R]) -> Callable[P, R]:
-
         @functools.wraps(func)
         def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             for attempt in range(max_retries):
@@ -104,13 +101,14 @@ def retry_on_connection_error(
                     return func(*args, **kwargs)
                 except (ConnectionError, OSError) as e:
                     if attempt == max_retries - 1:
-                        print(f"Failed after {max_retries} attempts: {e}")
+                        print(f'Failed after {max_retries} attempts: {e}')
                         raise e
 
-                    wait_time = backoff_factor * (2 ** attempt)
+                    wait_time = backoff_factor * (2**attempt)
                     time.sleep(wait_time)
 
-            raise RuntimeError("Unexpected exit from retry loop")
+            raise RuntimeError('Unexpected exit from retry loop')
 
         return wrapper
+
     return decorator

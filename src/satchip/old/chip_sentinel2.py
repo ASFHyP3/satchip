@@ -10,10 +10,10 @@ import shapely
 import xarray as xr
 from pystac.item import Item
 from pystac_client import Client
-
-from satchip import utils
 from satchip.chip_xr_base import create_dataset_chip, create_template_da
 from satchip.terra_mind_grid import TerraMindChip
+
+from satchip import utils
 
 
 S2_BANDS = OrderedDict(

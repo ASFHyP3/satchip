@@ -1,5 +1,4 @@
 from pathlib import Path
-from collections.abc import Iterable
 
 import numpy as np
 import rasterio
@@ -8,7 +7,7 @@ from rasterio.windows import Window
 from satchip import models
 
 
-def make_grid_from_reference(reference: Path, chip_size = 256) -> list[models.GridCell]:
+def make_grid_from_reference(reference: Path, chip_size: int = 256) -> list[models.GridCell]:
     grid = []
 
     with rasterio.open(reference) as ref:
@@ -20,7 +19,7 @@ def make_grid_from_reference(reference: Path, chip_size = 256) -> list[models.Gr
                 window = Window(col * chip_size, row * chip_size, chip_size, chip_size)
                 bounds = ref.window_bounds(window)
 
-                cell_id = f"{row:03d}.{col:03d}"
+                cell_id = f'{row:03d}.{col:03d}'
 
                 grid.append(models.GridCell(cell_id, bounds))
 
@@ -47,16 +46,16 @@ def chip_data(grid: list[models.GridCell], layer: Path, output_path: Path) -> li
             chip_meta = src.meta.copy()
             chip_meta.update(
                 {
-                    "width": window.width,
-                    "height": window.height,
-                    "transform": src.window_transform(window),
+                    'width': window.width,
+                    'height': window.height,
+                    'transform': src.window_transform(window),
                 }
             )
 
-            chip_name = f"{grid_cell.id}.{layer.name}"
+            chip_name = f'{grid_cell.id}.{layer.name}'
             chip_path = output_path / chip_name
 
-            with rasterio.open(chip_path, "w", **chip_meta) as dst:
+            with rasterio.open(chip_path, 'w', **chip_meta) as dst:
                 dst.write(data)
 
             chip = models.Chip(grid_cell.id, chip_path)
@@ -65,7 +64,12 @@ def chip_data(grid: list[models.GridCell], layer: Path, output_path: Path) -> li
     return chips
 
 
-def make_chip_stacks(data_chips: list[models.Chip], validation_mask_chips: list[models.Chip], label_chips: list[models.Chip], modality: models.Modality) -> list[models.ChipStack]:
+def make_chip_stacks(
+    data_chips: list[models.Chip],
+    validation_mask_chips: list[models.Chip],
+    label_chips: list[models.Chip],
+    modality: models.Modality,
+) -> list[models.ChipStack]:
     chip_stacks = []
 
     for data, mask, label in zip(
@@ -124,26 +128,44 @@ def is_good_hls_chip(chip_stack: models.ChipStack) -> bool:
     return pct_cf > 95 and pct_ev > 1
 
 
-def bytescale(arr, cmin=0, cmax=1, low=0, high=255):
-    # clip the data to be in the range of cmin to cmax
-    arr = np.clip(arr, cmin, cmax)
-    high = float(high)
-    low = float(low)
-    cmax = float(cmax)
-    cmin = float(cmin)
-    m = (high - low) / (cmax - cmin)  # slope
-    b = high - (m * cmax)  # intercept
-    arr = np.uint8((m * arr) + b)
-    return arr
-
-
 def clear_px_Fmask(Fmask: np.ndarray) -> np.ndarray:
-    fmask_clear = np.array([
-        0, 4, 16, 20, 32, 36, 48, 52,
-        64, 68, 80, 84, 96, 100, 112, 116,
-        128, 132, 144, 148, 160, 164, 176, 180,
-        192, 196, 208, 212, 224, 228, 240, 244
-    ], dtype=Fmask.dtype)
+    fmask_clear = np.array(
+        [
+            0,
+            4,
+            16,
+            20,
+            32,
+            36,
+            48,
+            52,
+            64,
+            68,
+            80,
+            84,
+            96,
+            100,
+            112,
+            116,
+            128,
+            132,
+            144,
+            148,
+            160,
+            164,
+            176,
+            180,
+            192,
+            196,
+            208,
+            212,
+            224,
+            228,
+            240,
+            244,
+        ],
+        dtype=Fmask.dtype,
+    )
 
     cloudmask = np.ones_like(Fmask, dtype=np.uint8)
     cloudmask[np.isin(Fmask, fmask_clear)] = 0
