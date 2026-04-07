@@ -45,6 +45,17 @@ def test_stack_bands(s2_local_files, s2_event, tmp_path):
     assert num_bands == len(bands)
 
 
+def test_reproject_files(s2_local_files, s2_event, tmp_path):
+    reprojected_files = merge_modality.reproject_files(s2_local_files, tmp_path / 'wgs84')
+
+    assert len(reprojected_files) == len(s2_local_files)
+
+    for f in reprojected_files:
+        with rasterio.open(f) as ds:
+            epsg_code = ds.profile['crs'].to_epsg()
+            assert epsg_code == 4326
+
+
 def test_warp_to_reference(s2_local_files, s2_event, tmp_path):
     merged = merge_modality.merge_modality(s2_local_files, models.HLS_S30, s2_event, tmp_path / 'merged')
     reprojected = merge_modality.reproject_files(merged, tmp_path / 'wgs84')
@@ -66,14 +77,3 @@ def test_warp_to_reference(s2_local_files, s2_event, tmp_path):
 
     assert len(outputs) == 3
     assert len(shapes) == 1
-
-
-def test_reproject_files(s2_local_files, s2_event, tmp_path):
-    reprojected_files = merge_modality.reproject_files(s2_local_files, tmp_path / 'wgs84')
-
-    assert len(reprojected_files) == len(s2_local_files)
-
-    for f in reprojected_files:
-        with rasterio.open(f) as ds:
-            epsg_code = ds.profile['crs'].to_epsg()
-            assert epsg_code == 4326

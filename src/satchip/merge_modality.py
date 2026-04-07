@@ -35,7 +35,7 @@ def merge_modality(
 
         merged_name = _make_merge_name(event.name, event.date, band.shortname, modality['id'])
 
-        merged_band_path = _merge(band_files, output_file=output_path / merged_name)
+        merged_band_path = merge_files(band_files, output_file=output_path / merged_name)
 
         merged.append(merged_band_path)
 
@@ -48,8 +48,8 @@ def _make_merge_name(event_name: str, start_date: datetime.datetime, band: str, 
     return f'{event_name}.{modality_id}.{date_str}.{band}.tif'
 
 
-def _merge(band_files: list[Path], output_file: Path) -> Path:
-    band_datasets = [rasterio.open(band_file) for band_file in band_files]
+def merge_files(files: list[Path], output_file: Path) -> Path:
+    band_datasets = [rasterio.open(band_file) for band_file in files]
 
     reference_crs = band_datasets[0].crs
     for ds in band_datasets[1:]:
@@ -73,7 +73,11 @@ def _merge(band_files: list[Path], output_file: Path) -> Path:
         )
 
         with rasterio.open(output_file, 'w', **out_meta) as dst:
-            dst.write(mosaic, 1)
+            if len(mosaic.shape) == 2:
+                dst.write(mosaic, 1)
+            else:
+                dst.write(mosaic)
+
     finally:
         for ds in band_datasets:
             ds.close()
