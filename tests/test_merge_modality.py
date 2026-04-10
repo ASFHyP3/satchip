@@ -1,6 +1,22 @@
+from pathlib import Path
 import rasterio
 
-from satchip import generate_labels, merge_modality, models
+from satchip import generate_labels, merge_modality, models, download_data
+
+
+def test_multi_projection_event(pristine_gdf):
+    swath = pristine_gdf.iloc[2]
+
+    data_path = Path(__file__).parent / 'data'
+    raw_path = data_path / 'raw'
+    merge_path = Path(__file__).parent / 'data' / 'merge'
+
+    modality = models.HLS_S30
+
+    event = models.Event(name=swath['HLSID'], date=swath['SwathDate'], wgs84_geometry=swath['geometry'], buffer_m=10000)
+
+    local_files = download_data.download_data(event, modality, raw_path)
+    merged_event = merge_modality.merge_modality(local_files, modality, event=event, output_path=merge_path)
 
 
 def test_make_merge_name(s2_event):
@@ -56,7 +72,7 @@ def test_reproject_files(s2_local_files, s2_event, tmp_path):
             assert epsg_code == 4326
 
 
-def test_warp_to_reference(s2_local_files, s2_event, tmp_path):
+def test_align_to_reference(s2_local_files, s2_event, tmp_path):
     merged = merge_modality.merge_modality(s2_local_files, models.HLS_S30, s2_event, tmp_path / 'merged')
     reprojected = merge_modality.reproject_files(merged, tmp_path / 'wgs84')
 
@@ -66,8 +82,8 @@ def test_warp_to_reference(s2_local_files, s2_event, tmp_path):
     stacked = merge_modality.stack_bands(bands, stacked_filename=tmp_path / 'stacked.tif')
     label = generate_labels.binary_mask_from_template(stacked, s2_event, tmp_path)
 
-    outputs = merge_modality.warp_to_reference(
-        label, [stacked, fmask], tmp_path / 'warped', s2_event.buffered_geometry().bounds
+    outputs = merge_modality.align_to_reference(
+        label, [stacked, fmask], tmp_path / 'aligned', s2_event.buffered_geometry().bounds
     )
 
     shapes = set()

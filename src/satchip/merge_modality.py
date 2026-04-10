@@ -19,7 +19,10 @@ def merge_modality(
     output_path: Path,
     selected_bands: list[models.Band] | None = None,
 ) -> list[Path]:
+    reproj_path = output_path / 'wgs84'
+
     output_path.mkdir(exist_ok=True, parents=True)
+    reproj_path.mkdir(exist_ok=True, parents=True)
 
     if len(modality_files) == 0:
         print(f'Warning: no data for {event.name}')
@@ -35,7 +38,8 @@ def merge_modality(
 
         merged_name = _make_merge_name(event.name, event.date, band.shortname, modality['id'])
 
-        merged_band_path = merge_files(band_files, output_file=output_path / merged_name)
+        reprojected_files = reproject_files(band_files, reproj_path)
+        merged_band_path = merge_files(reprojected_files, output_file=output_path / merged_name)
 
         merged.append(merged_band_path)
 
@@ -50,11 +54,6 @@ def _make_merge_name(event_name: str, start_date: datetime.datetime, band: str, 
 
 def merge_files(files: list[Path], output_file: Path) -> Path:
     band_datasets = [rasterio.open(band_file) for band_file in files]
-
-    reference_crs = band_datasets[0].crs
-    for ds in band_datasets[1:]:
-        if ds.crs != reference_crs:
-            ds.crs = reference_crs
 
     try:
         mosaic, out_trans = merge(band_datasets)

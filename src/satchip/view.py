@@ -18,6 +18,7 @@ def view_merged(
     save_to_file: Path | None = None,
     quite: bool = False,
 ):
+    save_to_file.parent.mkdir(exist_ok=True, parents=True)
     crs_pc = ccrs.PlateCarree()
 
     with rasterio.open(stacked_data_file) as ds:
@@ -61,6 +62,8 @@ def view_chip(
     save_to_file: Path | None = None,
     quite: bool = False,
 ):
+    save_to_file.parent.mkdir(exist_ok=True, parents=True)
+
     with rasterio.open(chip.data) as ds:
         bounds = ds.bounds
         full_extent = [bounds.left, bounds.right, bounds.bottom, bounds.top]
@@ -103,6 +106,8 @@ def view_chips(
     save_to_file: Path | None = None,
     quite: bool = False,
 ):
+    save_to_file.parent.mkdir(exist_ok=True, parents=True)
+
     merged_data = _merge_chips([chip.data for chip in chips], Path.cwd() / 'merged_data.tif')
     merged_label = _merge_chips([chip.label for chip in chips], Path.cwd() / 'merged_label.tif')
     try:

@@ -258,3 +258,5 @@ chips
 *.zip
 *.qgz
 hwds
+
+notebooks/data
