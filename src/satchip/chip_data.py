@@ -90,14 +90,14 @@ def make_chip_stacks(
     return chip_stacks
 
 
-def filter_chips(chip_stacks: list[models.ChipStack]) -> list[models.ChipStack]:
+def filter_damage_chips(chip_stacks: list[models.ChipStack]) -> list[models.ChipStack]:
     good_chips = []
 
     for chip_stack in chip_stacks:
         if 'HLS' in chip_stack.modality['id']:
-            is_good_chip = is_good_hls_chip(chip_stack)
+            is_good_chip = is_good_damage_hls_chip(chip_stack)
         elif 'RTC' in chip_stack.modality['id']:
-            is_good_chip = is_good_rtc_chip(chip_stack)
+            is_good_chip = is_good_damage_rtc_chip(chip_stack)
 
         if is_good_chip:
             good_chips.append(chip_stack)
@@ -105,10 +105,24 @@ def filter_chips(chip_stacks: list[models.ChipStack]) -> list[models.ChipStack]:
     return good_chips
 
 
-def is_good_hls_chip(chip_stack: models.ChipStack) -> bool:
+def filter_no_damage_chips(chip_stacks: list[models.ChipStack]) -> list[models.ChipStack]:
+    good_chips = []
+
+    for chip_stack in chip_stacks:
+        if 'HLS' in chip_stack.modality['id']:
+            is_good_chip = is_good_no_damage_hls_chip(chip_stack)
+        elif 'RTC' in chip_stack.modality['id']:
+            is_good_chip = is_good_no_damage_rtc_chip(chip_stack)
+
+        if is_good_chip:
+            good_chips.append(chip_stack)
+
+    return good_chips
+
+
+def _hls_chip_stats(chip_stack: models.ChipStack) -> tuple[float, float]:
     with rasterio.open(chip_stack.validation_mask) as ds:
         qc = clear_px_Fmask(ds.read(1))
-
     with rasterio.open(chip_stack.label) as ds:
         event = ds.read(1)
 
@@ -119,74 +133,58 @@ def is_good_hls_chip(chip_stack: models.ChipStack) -> bool:
     n_cf = len(np.where(qc == 0)[0])
     pct_cf = 100.0 * (n_cf / n_px)
 
-    # event pixels
-    n_ev = len(np.where(event > 0)[0])
-
     # pct of chip in event
+    n_ev = len(np.where(event > 0)[0])
     pct_ev = 100.0 * (n_ev / n_px) if n_ev > 0 else 0
 
+    return pct_cf, pct_ev
+
+
+def is_good_damage_hls_chip(chip_stack: models.ChipStack) -> bool:
+    pct_cf, pct_ev = _hls_chip_stats(chip_stack)
     return pct_cf > 95 and pct_ev > 1
+
+
+def is_good_no_damage_hls_chip(chip_stack: models.ChipStack) -> bool:
+    pct_cf, pct_ev = _hls_chip_stats(chip_stack)
+    return pct_cf > 95 and pct_ev < 1
 
 
 def clear_px_Fmask(Fmask: np.ndarray) -> np.ndarray:
     fmask_clear = np.array(
-        [
-            0,
-            4,
-            16,
-            20,
-            32,
-            36,
-            48,
-            52,
-            64,
-            68,
-            80,
-            84,
-            96,
-            100,
-            112,
-            116,
-            128,
-            132,
-            144,
-            148,
-            160,
-            164,
-            176,
-            180,
-            192,
-            196,
-            208,
-            212,
-            224,
-            228,
-            240,
-            244,
-        ],
+        [0, 4, 16, 20, 32, 36, 48, 52, 64, 68, 80, 84, 96, 100, 112, 116,
+         128, 132, 144, 148, 160, 164, 176, 180, 192, 196, 208, 212, 224, 228, 240, 244],
         dtype=Fmask.dtype,
     )
-
+    # 0 clear, 1 cloud, 255 nodata
     cloudmask = np.ones_like(Fmask, dtype=np.uint8)
     cloudmask[np.isin(Fmask, fmask_clear)] = 0
     cloudmask[Fmask == 255] = 255
-
     return cloudmask
 
 
-def is_good_rtc_chip(chip_stack: models.ChipStack) -> bool:
+def _rtc_chip_stats(chip_stack: models.ChipStack) -> tuple[bool, bool]:
     with rasterio.open(chip_stack.data) as ds:
         rtc_data = ds.read()
-
     with rasterio.open(chip_stack.label) as ds:
         event_mask = ds.read(1)
 
     has_nan_pixels = np.isnan(rtc_data).sum() > 0
 
+    # pct of chip in event
     num_pixels = event_mask.size
     num_event_pixels = np.count_nonzero(event_mask > 0)
-
     pct_pixels_over_event = 100.0 * (num_event_pixels / num_pixels)
     data_overlaps_event = pct_pixels_over_event > 1
 
+    return has_nan_pixels, data_overlaps_event
+
+
+def is_good_damage_rtc_chip(chip_stack: models.ChipStack) -> bool:
+    has_nan_pixels, data_overlaps_event = _rtc_chip_stats(chip_stack)
     return not has_nan_pixels and data_overlaps_event
+
+
+def is_good_no_damage_rtc_chip(chip_stack: models.ChipStack) -> bool:
+    has_nan_pixels, data_overlaps_event = _rtc_chip_stats(chip_stack)
+    return not has_nan_pixels and not data_overlaps_event
