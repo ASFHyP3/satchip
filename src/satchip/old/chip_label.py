@@ -5,11 +5,11 @@ from pathlib import Path
 import numpy as np
 import rasterio as rio
 import xarray as xr
+from satchip.chip_xr_base import create_dataset_chip
+from satchip.terra_mind_grid import TerraMindGrid
 from tqdm import tqdm
 
 from satchip import utils
-from satchip.chip_xr_base import create_dataset_chip
-from satchip.terra_mind_grid import TerraMindGrid
 
 
 def is_valuable(chip: np.ndarray) -> bool:

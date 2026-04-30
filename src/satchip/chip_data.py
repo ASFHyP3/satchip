@@ -1,146 +1,190 @@
-import argparse
-from collections import Counter
-from datetime import datetime
 from pathlib import Path
 
 import numpy as np
-import xarray as xr
-from shapely.geometry import box
-from tqdm import tqdm
+import rasterio
+from rasterio.windows import Window
 
-from satchip import utils
-from satchip.chip_hls import get_hls_data
-from satchip.chip_hyp3s1rtc import get_rtc_paths_for_chips, get_s1rtc_chip_data
-from satchip.chip_operas1rtc import get_operartc_data
-from satchip.chip_sentinel2 import get_s2l2a_data
-from satchip.terra_mind_grid import TerraMindChip, TerraMindGrid
+from satchip import models
 
 
-def fill_missing_times(data_chip: xr.DataArray, times: np.ndarray) -> xr.DataArray:
-    missing_times = np.setdiff1d(times, data_chip.time.data)
-    missing_shape = (len(missing_times), len(data_chip.band), data_chip.y.size, data_chip.x.size)
-    missing_data = xr.DataArray(
-        np.full(missing_shape, 0, dtype=data_chip.dtype),
-        dims=('time', 'band', 'y', 'x'),
-        coords={
-            'time': missing_times,
-            'band': data_chip.band.data,
-            'y': data_chip.y.data,
-            'x': data_chip.x.data,
-        },
-    )
-    return xr.concat([data_chip, missing_data], dim='time').sortby('time')
+def make_grid_from_reference(reference: Path, chip_size: int = 256) -> list[models.GridCell]:
+    grid = []
+
+    with rasterio.open(reference) as ref:
+        n_cols = ref.width // chip_size
+        n_rows = ref.height // chip_size
+
+        for row in range(n_rows):
+            for col in range(n_cols):
+                window = Window(col * chip_size, row * chip_size, chip_size, chip_size)
+                bounds = ref.window_bounds(window)
+
+                cell_id = f'{row:03d}.{col:03d}'
+
+                grid.append(models.GridCell(cell_id, bounds))
+
+    return grid
 
 
-def get_chips(label_paths: list[Path]) -> list[TerraMindChip]:
-    label_datasets = [utils.load_chip(label_path) for label_path in label_paths]
-    bounds = utils.get_overall_bounds([ds.bounds for ds in label_datasets])
-
-    buffered = box(*bounds).buffer(0.5).bounds
-    grid = TerraMindGrid(latitude_range=(buffered[1], buffered[3]), longitude_range=(buffered[0], buffered[2]))
-    grid_chips = {chip.name: chip for chip in grid.terra_mind_chips}
+def chip_data(grid: list[models.GridCell], layer: Path, output_path: Path) -> list[models.Chips]:
+    output_path.mkdir(exist_ok=True, parents=True)
 
     chips = []
-    for label_dataset in label_datasets:
-        label_chip_name = label_dataset.sample.item()
-        assert label_chip_name in grid_chips, f'No TerraMind chip found for label {label_chip_name}'
-        chip = grid_chips[label_chip_name]
-        chips.append(chip)
+
+    with rasterio.open(layer) as src:
+        for grid_cell in grid:
+            window = src.window(*grid_cell.bounds)
+            window = Window(
+                round(window.col_off),
+                round(window.row_off),
+                round(window.width),
+                round(window.height),
+            )
+
+            data = src.read(window=window)
+
+            chip_meta = src.meta.copy()
+            chip_meta.update(
+                {
+                    'width': window.width,
+                    'height': window.height,
+                    'transform': src.window_transform(window),
+                }
+            )
+
+            chip_name = f'{grid_cell.id}.{layer.name}'
+            chip_path = output_path / chip_name
+
+            with rasterio.open(chip_path, 'w', **chip_meta) as dst:
+                dst.write(data)
+
+            chip = models.Chip(grid_cell.id, chip_path)
+            chips.append(chip)
 
     return chips
 
 
-def chip_data(
-    chip: TerraMindChip,
-    platform: str,
-    opts: utils.ChipDataOpts,
-    image_dir: Path,
-) -> xr.Dataset:
-    if platform == 'HYP3S1RTC':
-        rtc_paths = opts['local_hyp3_paths'][chip.name]
-        chip_dataset = get_s1rtc_chip_data(chip, rtc_paths)
-    elif platform == 'S1RTC':
-        chip_dataset = get_operartc_data(chip, image_dir, opts=opts)
-    elif platform == 'S2L2A':
-        chip_dataset = get_s2l2a_data(chip, image_dir, opts=opts)
-    elif platform == 'HLS':
-        chip_dataset = get_hls_data(chip, image_dir, opts=opts)
-    else:
-        raise Exception(f'Unknown platform {platform}')
+def make_chip_stacks(
+    data_chips: list[models.Chip],
+    validation_mask_chips: list[models.Chip],
+    label_chips: list[models.Chip],
+    modality: models.Modality,
+) -> list[models.ChipStack]:
+    chip_stacks = []
 
-    return chip_dataset
+    for data, mask, label in zip(
+        sorted(data_chips, key=lambda c: c.id),
+        sorted(validation_mask_chips, key=lambda c: c.id),
+        sorted(label_chips, key=lambda c: c.id),
+    ):
+        chip_stack = models.ChipStack(
+            id=data.id,
+            data=data.path,
+            validation_mask=mask.path,
+            label=label.path,
+            modality=modality,
+        )
 
+        chip_stacks.append(chip_stack)
 
-def create_chips(
-    label_paths: list[Path],
-    platform: str,
-    date_start: datetime,
-    date_end: datetime,
-    strategy: str,
-    max_cloud_pct: int,
-    chip_dir: Path,
-    image_dir: Path,
-) -> list[Path]:
-    platform_dir = chip_dir / platform
-    platform_dir.mkdir(parents=True, exist_ok=True)
-
-    opts: utils.ChipDataOpts = {'strategy': strategy, 'date_start': date_start, 'date_end': date_end}
-    if platform in ['S2L2A', 'HLS']:
-        opts['max_cloud_pct'] = max_cloud_pct
-
-    chips = get_chips(label_paths)
-    chip_names = [c.name for c in chips]
-    if len(chip_names) != len(set(chip_names)):
-        duplicates = [name for name, count in Counter(chip_names).items() if count > 1]
-        msg = f'Duplicate sample locations not supported. Duplicate chips: {", ".join(duplicates)}'
-        raise NotImplementedError(msg)
-    chip_paths = [
-        platform_dir / (x.with_suffix('').with_suffix('').name + f'_{platform}.zarr.zip') for x in label_paths
-    ]
-    if platform == 'HYP3S1RTC':
-        rtc_paths_for_chips = get_rtc_paths_for_chips(chips, image_dir, opts)
-        opts['local_hyp3_paths'] = rtc_paths_for_chips
-
-    for chip, chip_path in tqdm(list(zip(chips, chip_paths)), desc='Chipping labels'):
-        dataset = chip_data(chip, platform, opts, image_dir)
-        utils.save_chip(dataset, chip_path)
-    return chip_paths
+    return chip_stacks
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description='Chip a label image')
-    parser.add_argument('labelpath', type=Path, help='Path to the label directory')
-    parser.add_argument(
-        'platform', choices=['S1RTC', 'S2L2A', 'HLS', 'HYP3S1RTC'], type=str, help='Dataset to create chips for'
+def filter_damage_chips(chip_stacks: list[models.ChipStack]) -> list[models.ChipStack]:
+    good_chips = []
+
+    for chip_stack in chip_stacks:
+        if 'HLS' in chip_stack.modality['id']:
+            is_good_chip = is_good_damage_hls_chip(chip_stack)
+        elif 'RTC' in chip_stack.modality['id']:
+            is_good_chip = is_good_damage_rtc_chip(chip_stack)
+
+        if is_good_chip:
+            good_chips.append(chip_stack)
+
+    return good_chips
+
+
+def filter_no_damage_chips(chip_stacks: list[models.ChipStack]) -> list[models.ChipStack]:
+    good_chips = []
+
+    for chip_stack in chip_stacks:
+        if 'HLS' in chip_stack.modality['id']:
+            is_good_chip = is_good_no_damage_hls_chip(chip_stack)
+        elif 'RTC' in chip_stack.modality['id']:
+            is_good_chip = is_good_no_damage_rtc_chip(chip_stack)
+
+        if is_good_chip:
+            good_chips.append(chip_stack)
+
+    return good_chips
+
+
+def _hls_chip_stats(chip_stack: models.ChipStack) -> tuple[float, float]:
+    with rasterio.open(chip_stack.validation_mask) as ds:
+        qc = clear_px_Fmask(ds.read(1))
+    with rasterio.open(chip_stack.label) as ds:
+        event = ds.read(1)
+
+    ny, nx = qc.shape
+    n_px = 1.0 * ny * nx
+
+    # cloud-free pixels (0 clear, 1 cloud, 255 nodata)
+    n_cf = len(np.where(qc == 0)[0])
+    pct_cf = 100.0 * (n_cf / n_px)
+
+    # pct of chip in event
+    n_ev = len(np.where(event > 0)[0])
+    pct_ev = 100.0 * (n_ev / n_px) if n_ev > 0 else 0
+
+    return pct_cf, pct_ev
+
+
+def is_good_damage_hls_chip(chip_stack: models.ChipStack) -> bool:
+    pct_cf, pct_ev = _hls_chip_stats(chip_stack)
+    return pct_cf > 95 and pct_ev > 1
+
+
+def is_good_no_damage_hls_chip(chip_stack: models.ChipStack) -> bool:
+    pct_cf, pct_ev = _hls_chip_stats(chip_stack)
+    return pct_cf > 95 and pct_ev < 1
+
+
+def clear_px_Fmask(Fmask: np.ndarray) -> np.ndarray:
+    fmask_clear = np.array(
+        [0, 4, 16, 20, 32, 36, 48, 52, 64, 68, 80, 84, 96, 100, 112, 116,
+         128, 132, 144, 148, 160, 164, 176, 180, 192, 196, 208, 212, 224, 228, 240, 244],
+        dtype=Fmask.dtype,
     )
-    parser.add_argument('daterange', type=str, help='Inclusive date range to search for data in the format Ymd-Ymd')
-    parser.add_argument('--maxcloudpct', default=100, type=int, help='Maximum percent cloud cover for a data chip')
-    parser.add_argument('--chipdir', default='.', type=Path, help='Output directory for the chips')
-    parser.add_argument(
-        '--imagedir', default=None, type=Path, help='Output directory for image files. Defaults to chipdir/IMAGES'
-    )
-    parser.add_argument(
-        '--strategy',
-        default='BEST',
-        choices=['BEST', 'ALL'],
-        type=str,
-        help='Strategy to use when multiple scenes are found (default: BEST)',
-    )
-    args = parser.parse_args()
-    args.platform = args.platform.upper()
-    assert 0 <= args.maxcloudpct <= 100, 'maxcloudpct must be between 0 and 100'
-    date_start, date_end = [datetime.strptime(d, '%Y%m%d') for d in args.daterange.split('-')]
-    assert date_start < date_end, 'start date must be before end date'
-    label_paths = list(args.labelpath.glob('*.zarr.zip'))
-    assert len(label_paths) > 0, f'No label files found in {args.labelpath}'
-
-    if args.imagedir is None:
-        args.imagedir = args.chipdir / 'IMAGES'
-
-    create_chips(
-        label_paths, args.platform, date_start, date_end, args.strategy, args.maxcloudpct, args.chipdir, args.imagedir
-    )
+    # 0 clear, 1 cloud, 255 nodata
+    cloudmask = np.ones_like(Fmask, dtype=np.uint8)
+    cloudmask[np.isin(Fmask, fmask_clear)] = 0
+    cloudmask[Fmask == 255] = 255
+    return cloudmask
 
 
-if __name__ == '__main__':
-    main()
+def _rtc_chip_stats(chip_stack: models.ChipStack) -> tuple[bool, bool]:
+    with rasterio.open(chip_stack.data) as ds:
+        rtc_data = ds.read()
+    with rasterio.open(chip_stack.label) as ds:
+        event_mask = ds.read(1)
+
+    has_nan_pixels = np.isnan(rtc_data).sum() > 0
+
+    # pct of chip in event
+    num_pixels = event_mask.size
+    num_event_pixels = np.count_nonzero(event_mask > 0)
+    pct_pixels_over_event = 100.0 * (num_event_pixels / num_pixels)
+    data_overlaps_event = pct_pixels_over_event > 1
+
+    return has_nan_pixels, data_overlaps_event
+
+
+def is_good_damage_rtc_chip(chip_stack: models.ChipStack) -> bool:
+    has_nan_pixels, data_overlaps_event = _rtc_chip_stats(chip_stack)
+    return not has_nan_pixels and data_overlaps_event
+
+
+def is_good_no_damage_rtc_chip(chip_stack: models.ChipStack) -> bool:
+    has_nan_pixels, data_overlaps_event = _rtc_chip_stats(chip_stack)
+    return not has_nan_pixels and not data_overlaps_event

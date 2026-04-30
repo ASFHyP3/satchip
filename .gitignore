@@ -246,3 +246,17 @@ tags
 *tif*
 integration_test/
 chips
+*.h5
+
+*.cpg
+*.dbf
+*.prj
+*.sbn
+*.sbx
+*.shp
+*.shx
+*.zip
+*.qgz
+hwds
+
+notebooks/data
